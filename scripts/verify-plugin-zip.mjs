@@ -148,4 +148,18 @@ if (!list.includes("bin/dist-node/cli/abfall_api.cjs") || !list.includes("bin/di
   process.exit(1);
 }
 
+// LoxBerry reads plugin.cfg with Perl Config::Simple, which turns a value containing a comma into an
+// array. A comma in e.g. TITLE then crashes the install page ("plugindb_title … with an array ref").
+const cfgCommaLines = fs
+  .readFileSync(pluginCfg, "utf-8")
+  .split(/\r?\n/)
+  .filter((l) => /^[^#;\s][^=]*=.*,/.test(l));
+if (cfgCommaLines.length) {
+  console.error(
+    "plugin.cfg values must not contain commas (Config::Simple splits them into arrays on LoxBerry):\n" +
+      cfgCommaLines.map((l) => `  - ${l}`).join("\n"),
+  );
+  process.exit(1);
+}
+
 console.log(`OK: ${path.basename(zipPath)} (${list.length} entries) — LoxBerry layout is sane, no dev junk.`);
