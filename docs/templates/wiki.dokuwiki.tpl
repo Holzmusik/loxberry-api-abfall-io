@@ -10,7 +10,7 @@
 
 ===== Überblick =====
 
-Das Plugin liefert **Abfuhrtermine** über die öffentliche Schnittstelle **[[https://api.abfall.io/|api.abfall.io]]** — dieselbe öffentliche Quelle wie viele kommunale Abfuhr‑Angebote im Web. Du konfigurierst im Plugin zuerst **Gebiet** bzw. **Service‑Schlüssel**, speicherst, danach **Straße und Hausnr.** und speicherst erneut. Wenn die Konfiguration passt, zeigt der Tab **Status** nach einem Abruf die nächsten Termine.
+Das Plugin liefert **Abfuhrtermine** direkt aus dem öffentlichen Abfuhrkalender deines Entsorgers. Unterstützt werden fünf Datenquellen: **[[https://api.abfall.io/|api.abfall.io]]** (viele Kommunen bundesweit), **hausmuell.info** (z. B. Schmalkalden‑Meiningen, Suhl, Eichsfeld, Wartburgkreis, Börde, Wesel), **Müllabfuhr Deutschland** (z. B. Hildburghausen, Weimarer Land, Sömmerda, Saalekreis), **AWIDO** (49 Landkreise/Städte, z. B. Haßberge, Gotha, Saale‑Orla, Schweinfurt, Coburg) und der **Abfuhr‑Wecker** (Landkreis Rhön‑Grabfeld). Im Tab **Standort** wählst du zuerst die **Datenquelle**, dann Entsorger bzw. Gebiet und deine **Adresse** und speicherst. Wenn die Konfiguration passt, zeigt der Tab **Status** nach einem Abruf die nächsten Termine.
 
 **Drei gängige Integrationswege** (einer reicht je nach Zielumgebung):
 
@@ -22,7 +22,7 @@ Das Plugin liefert **Abfuhrtermine** über die öffentliche Schnittstelle **[[ht
 
 **Abrufintervall:** Mindestens **6 Stunden** zwischen Abrufen ist voreingestellt und nach oben verlängerbar; zusätzlich wirkt eine **Zufallsverschiebung** der Ausführungsminute, um gleichzeitige Lastspitzen zu reduzieren.
 
-**Disclaimer:** Das Projekt ist **öffentlich/community‑geführt**, **nicht** offiziell durch die Betreiber von api.abfall.io. Der öffentliche Dienst kann sein Angebot ändern; die Nutzung durch dieses Plugin kann dadurch eingeschränkt werden oder ausfallen. Volltext: **[[https://github.com/spid3r/loxberry-api-abfall-io/blob/main/DISCLAIMER.md|DISCLAIMER auf GitHub]]**.
+**Disclaimer:** Das Projekt ist **öffentlich/community‑geführt**, **nicht** offiziell durch die Betreiber der genutzten Dienste (api.abfall.io, hausmuell.info, Müllabfuhr Deutschland, AWIDO, Abfuhr‑Wecker) oder durch die Entsorger. Die öffentlichen Dienste können ihr Angebot ändern; die Nutzung durch dieses Plugin kann dadurch eingeschränkt werden oder ausfallen. Volltext: **[[https://github.com/spid3r/loxberry-api-abfall-io/blob/main/DISCLAIMER.md|DISCLAIMER auf GitHub]]**.
 
 
 ===== Download =====
@@ -51,7 +51,9 @@ Voraussetzung: **LoxBerry ab Version 3.x**. ZIP unter **System → Plugins** ins
 
 **Empfohlene Reihenfolge**
 
-  * Tab **Standort**: Region auswählen oder **Service‑Schlüssel** eintragen (32‑Zeichen‑Hex‑Schlüssel der jeweiligen Entsorgung, falls die automatische Regionsliste ihn nicht enthält).
+  * Tab **Standort**: zuerst die **Datenquelle** wählen. Bei **hausmuell.info, Müllabfuhr Deutschland, AWIDO und Abfuhr‑Wecker** Entsorger bzw. Landkreis wählen, die Adresse durchklicken und **Adresse speichern** — fertig, der Abruf startet automatisch. Die folgenden Schritte gelten nur für **api.abfall.io**.
+
+  * **api.abfall.io:** Region auswählen oder **Service‑Schlüssel** eintragen (32‑Zeichen‑Hex‑Schlüssel der jeweiligen Entsorgung, falls die automatische Regionsliste ihn nicht enthält).
 
   * **Speichern** — sonst sind Straßensuche und Abruf häufig blockiert oder unvollständig.
 
@@ -59,7 +61,7 @@ Voraussetzung: **LoxBerry ab Version 3.x**. ZIP unter **System → Plugins** ins
 
   * Tab **Status**: **Jetzt abrufen** ausführen und prüfen, ob Termine erscheinen.
 
-Bei Problemen zuerst den Tab **Log** auswerten (Fehlermeldungen des Plugins, Netzwerk, fehlende Speicherung, Gemeinde nicht auf api.abfall.io verfügbar).
+Bei Problemen zuerst den Tab **Log** auswerten (Fehlermeldungen des Plugins, Netzwerk, fehlende Speicherung, Gemeinde nicht bei der gewählten Datenquelle verfügbar).
 
 
 ===== Konfiguration (Auszug) =====
@@ -74,7 +76,7 @@ Bei Problemen zuerst den Tab **Log** auswerten (Fehlermeldungen des Plugins, Net
 
   * **Sprache** der Oberfläche: Deutsch oder Englisch.
 
-**Regionsliste:** Optional **online aktualisieren**. Fehlt die Gemeinde danach weiterhin, liegt das oft daran, dass **nicht jede Kommune** über api.abfall.io angebunden ist; dann den **Service‑Schlüssel** manuell setzen (siehe Hilfe im Plugin).
+**Regionsliste:** Optional **online aktualisieren**. Fehlt die Gemeinde danach weiterhin, liegt das oft daran, dass **nicht jede Kommune** über api.abfall.io angebunden ist; dann den **Service‑Schlüssel** manuell setzen oder prüfen, ob dein Entsorger eine der anderen Datenquellen nutzt (siehe README auf GitHub, Abschnitt „Which data source do I need?“).
 
 
 ===== Unterstützte Regionen (aus Service-Map) =====

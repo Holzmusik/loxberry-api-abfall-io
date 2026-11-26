@@ -65,10 +65,13 @@ async function sanitizeUi(page) {
     setValue("mqtt-password", "********");
     setValue("mqtt-host", "localhost");
 
-    document.querySelectorAll(".selected-location").forEach((el) => {
+    // Saved address of every provider (#hm-current, #mf-current, #aw-current, #of-current, abfall.io block)
+    // and the "Selected: …" trails of the click-through address selection.
+    document.querySelectorAll(".selected-location, #hm-trail, #mf-trail, #aw-trail, #of-trail").forEach((el) => {
+      if (!(el instanceof HTMLElement) || el.style.display === "none") return;
       const strong = el.querySelector("strong");
       const label = strong ? `${strong.textContent ?? ""} ` : "";
-      el.textContent = `${label}Beispielstraße 12`;
+      el.textContent = `${label}Beispielort, Beispielstraße 12`;
     });
   });
 }
@@ -92,7 +95,11 @@ async function activateTab(page, tabId) {
 }
 
 async function captureTab(page, route, tabId, targetFile) {
-  await page.goto(route, { waitUntil: "domcontentloaded" });
+  // Load each tab by its own URL so tab-specific init runs (e.g. the provider lists on the Location tab).
+  const url = new URL(route);
+  url.searchParams.set("tab", tabId.replace("#tab-", ""));
+  await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(450);
   await sanitizeUi(page);
   await activateTab(page, tabId);

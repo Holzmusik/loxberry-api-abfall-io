@@ -17,22 +17,35 @@
 [![Playwright](https://img.shields.io/badge/Playwright-e2e-45ba4b?logo=playwright&logoColor=white)](./test-e2e/)
 [![LoxBerry](https://img.shields.io/badge/LoxBerry-3.x-2d2d2d)](https://wiki.loxberry.de/)
 
-LoxBerry 3 plugin that retrieves waste-collection schedules from
-[`api.abfall.io`](https://api.abfall.io/) and exposes them as JSON, flat-text
-(Loxone) and MQTT topics.
+LoxBerry 3 plugin that retrieves waste-collection schedules straight from your waste operator's public calendar
+and exposes them as JSON, flat-text (Loxone) and MQTT topics. Five upstreams are supported:
 
-**Disclaimer (read this):** This project is **not** official,
-**not** endorsed by the api.abfall.io / AbfallPlus operators, and **there is no support obligation** from them or from
-the maintainers. It is a **community best-effort** tool using **publicly accessible** HTTP usage, with a **minimum
-6-hour** interval between scheduled fetches to avoid placing unnecessary load on upstream servers. The service may
-**change or stop at any time**. Full text: **[DISCLAIMER.md](./DISCLAIMER.md)** (German and English).
+| Data source | Coverage | Address selection |
+|---|---|---|
+| [api.abfall.io](#apiabfallio) (AbfallPlus) | many municipalities across Germany (region list from the Home Assistant community) | region / service key → street → house number |
+| [hausmuell.info](#hausmuellinfo-portals) (ATURIS) | 6 portals: Schmalkalden-Meiningen, Suhl, Eichsfeld, Wartburgkreis, Börde, Wesel | portal → Ort → (Ortsteil) → (Straße) → (Hausnummer) |
+| [Müllabfuhr Deutschland](#müllabfuhr-deutschland) | 7 districts: Hildburghausen, Weimarer Land, Sömmerda, Wittenberg, Burgenlandkreis, Dessau-Roßlau, Saalekreis (list read live) | district → Ort → (Ortsteil) → (Straße) |
+| [AWIDO](#awido) (cubefour) | 49 districts/towns, mainly Bavaria, Hesse, Baden-Württemberg, Thuringia (e.g. Haßberge, Gotha, Saale-Orla, Altenburger Land, Schweinfurt, Coburg) | operator → Ort → Straße/Bereich → (Hausnummer) |
+| [Abfuhr-Wecker](#abfuhr-wecker-offizium) (offizium) | Landkreis Rhön-Grabfeld | district → Gemeinde → Ortsteil |
+
+Steps in parentheses only appear where the operator needs them. All sources run through the same parser, category
+filter, cache, Loxone and MQTT output.
+
+**Disclaimer (read this):** This project is **not** official and **not** endorsed by the operators of any of these
+services (api.abfall.io / AbfallPlus, hausmuell.info / ATURIS, portal.muellabfuhr-deutschland.de, AWIDO / cubefour,
+Abfuhr-Wecker / offizium) or by the waste operators, and **there is no support obligation** from them or from the
+maintainers. It is a **community best-effort** tool using **publicly accessible** interfaces, with a **minimum
+6-hour** interval between scheduled fetches to avoid placing unnecessary load on upstream servers. The services may
+**change or stop at any time**; your operator's own information always prevails. Full text:
+**[DISCLAIMER.md](./DISCLAIMER.md)** (German and English).
 
 ## Table of contents
 
 - [Features](#features)
 - [Screenshots (admin UI)](#screenshots-admin-ui)
-- [Data source](#data-source)
-- [Supported regions in the UI](#supported-regions-in-the-ui)
+- [Data sources](#data-sources)
+  - [api.abfall.io](#apiabfallio) · [hausmuell.info](#hausmuellinfo-portals) · [Müllabfuhr Deutschland](#müllabfuhr-deutschland) · [AWIDO](#awido) · [Abfuhr-Wecker](#abfuhr-wecker-offizium)
+- [Which data source do I need?](#which-data-source-do-i-need)
 - [Public help page](#public-help-page-and-languages)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -46,7 +59,12 @@ the maintainers. It is a **community best-effort** tool using **publicly accessi
 ## Features
 
 - **Admin UI in German and English** — language from **Language** dropdown, `?lang=de` / `?lang=en`, cookie, plugin config, LoxBerry system language, `Accept-Language`; default **German**. **Status** tab includes a short “how to use” block. Page is **embedded in the LoxBerry shell** like other plugins.
-- Street and house-number lookup against `api.abfall.io`.
+- **Five data sources** (see table above), chosen on the **Location** tab; address selection is a click-through list
+  with a filter field for every step. Existing configurations stay on api.abfall.io.
+- **Next year included:** every source also fetches the following year's dates once the operator has published them,
+  so there is no gap at the turn of the year.
+- **Robust names:** prefixes like "verschobene Abholung:" are folded into the base category, mixed UTF-8/Latin-1
+  feeds are repaired, and switching operator clears the (operator-specific) category filter.
 - **Cron** (hourly at minute 17): `fetch.cjs` respects a **minimum interval** (default **6 h**, up to 168 h) plus **fuzz** (default ±30 min) so many boxes do not hit the API at the same instant.
 - **JSON** via admin/ajax; optional **JSON snapshot** from `plugins/.../index.php?format=json`; Loxone **flat text** from `webfrontend/html/loxone.php`.
 - **Icons:** `icons/icon_*.png` (labelled) → `/system/images/icons/abfallio/`; admin header uses `webfrontend/htmlauth/icon_64.png` (glyph from `icon_source_without_text.svg`). `ICON=icon_64.png` in `plugin.cfg`.
@@ -54,7 +72,8 @@ the maintainers. It is a **community best-effort** tool using **publicly accessi
 
 ## Screenshots (admin UI)
 
-The repo ships **German** admin previews under `docs/wiki-assets/` (JPEG). They are captured **automatically** with Playwright against a real appliance — see **`npm run wiki:screenshots`** and [`scripts/generate-wiki-screenshots.mjs`](./scripts/generate-wiki-screenshots.mjs) (needs `.env` with base URL and credentials; same assets feed `npm run wiki:build` → LoxWiki).
+The repo ships **German** admin previews under `docs/wiki-assets/` (JPEG); addresses are replaced by placeholders
+before capture. They are captured **automatically** with Playwright against a real appliance — see **`npm run wiki:screenshots`** and [`scripts/generate-wiki-screenshots.mjs`](./scripts/generate-wiki-screenshots.mjs) (needs `.env` with base URL and credentials; same assets feed `npm run wiki:build` → LoxWiki).
 
 <p align="center"><strong>Status</strong></p>
 <p align="center"><img src="docs/wiki-assets/abfallio-status-de.jpg" alt="Abfall.io plugin: Status tab (German)" width="820" /></p>
@@ -63,30 +82,33 @@ The repo ships **German** admin previews under `docs/wiki-assets/` (JPEG). They 
 <p align="center"><strong>Einstellungen / Settings</strong> (inkl. MQTT)</p>
 <p align="center"><img src="docs/wiki-assets/abfallio-settings-de.jpg" alt="Abfall.io plugin: Settings tab (German)" width="820" /></p>
 
-## Data source
+## Which data source do I need?
 
-Two upstreams, chosen at the top of the **Location** tab (existing configs stay on api.abfall.io):
+Open your waste operator's "Abfuhrkalender" page in a browser and look at where the calendar comes from:
 
-1. **api.abfall.io** (default) — see below.
-2. **hausmuell.info** — ATURIS waste-calendar portals (`https://<subdomain>.hausmuell.info/`), see [hausmuell.info portals](#hausmuellinfo-portals).
-3. **Müllabfuhr Deutschland** — customer portal `https://portal.muellabfuhr-deutschland.de/`, see [Müllabfuhr Deutschland](#müllabfuhr-deutschland).
-4. **AWIDO** (cubefour) — waste calendars of 49 districts/towns, often embedded in the operator's own website, see [AWIDO](#awido).
-5. **Abfuhr-Wecker** (offizium) — Landkreis Rhön-Grabfeld, see [Abfuhr-Wecker](#abfuhr-wecker-offizium).
+- the address contains **`.hausmuell.info`** → *hausmuell.info*
+- the address is **`portal.muellabfuhr-deutschland.de/…`** → *Müllabfuhr Deutschland*
+- your district is in the [AWIDO list](#awido) — the calendar is often embedded in the district's own website
+  (e.g. awhas.de), the operator's site or app mentions **AWIDO** / `awido.cubefour.de` → *AWIDO*
+- Landkreis Rhön-Grabfeld → *Abfuhr-Wecker*
+- otherwise try *api.abfall.io* (region autocomplete; or the 32-character service key from the operator's ICS export)
 
-Both deliver ICS that runs through the same parser, category filter, cache, Loxone and MQTT output.
+If none of them fits, your operator uses another system that this plugin does not cover (yet).
+
+## Data sources
+
+All sources need **no account**. The data source is chosen at the top of the **Location** tab.
 
 ### api.abfall.io
 
 Public [`api.abfall.io`](https://api.abfall.io/). Schedules are fetched as **ICS** in the background and normalised — no manual ICS files. **No personal account** on api.abfall.io. Each provider has a **32-character hex service key** (same as on municipal “Abfuhrtermine” pages). **Location** tab: pick region or expert key → **Save region & settings**; then street search. Until a key is saved, street search and fetch are disabled. Finding the key: browser **Network** tab on ICS export, or community docs (e.g. Home Assistant [abfall.io source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io.md)).
 
-## Supported regions in the UI
-
-Only schedules reachable via **api.abfall.io**. The **Location** tab lists supported regions in the collapsible *“Which regions work?”* block (names from the bundled autocomplete data).
+**Supported regions:** the **Location** tab lists them in the collapsible *“Which regions work?”* block (names from the bundled autocomplete data).
 
 - **Source:** community list aligned with Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) / *AbfallIO* `SERVICE_MAP`; plugin can **refresh online** (`AbfallIO.py`).
 - **Bundled:** `data/abfallio-service-map.json` (in the ZIP).
 - **Override:** `<LBHOMEDIR>/data/plugins/<FOLDER>/abfallio-service-map.json` if present.
-- **Town missing?** Try expert **service key**, or check whether your operator uses a **hausmuell.info** portal (below).
+- **Town missing?** Try expert **service key**, or check the [other data sources](#which-data-source-do-i-need).
 
 ### hausmuell.info portals
 
@@ -158,9 +180,9 @@ Opening `plugins/<folder>/index.php` shows a **short help** page (`?view=html`).
 
 1. Download the latest plugin ZIP from [GitHub Releases](https://github.com/spid3r/loxberry-api-abfall-io/releases).
 2. **System → Plugins** → install.
-3. Open plugin → **Location**: region (or service key) → **Save region & settings** → street → save → **Status** → **Fetch now**.
+3. Open plugin → **Location**: choose the [data source](#which-data-source-do-i-need), then operator/region and your address → save. The plugin switches to **Status** and fetches right away.
 
-**Beginner path:** (1) Location + save. (2) Street + save. (3) Status → Fetch now. (4) Optional: **Settings** (interval ≥6 h, filter, MQTT, Loxone/JSON). Problems → **Log** tab. See [DISCLAIMER.md](./DISCLAIMER.md).
+**Beginner path:** (1) Location: data source → operator → address → save. (2) Status: dates appear (or **Fetch now**). (3) Optional: **Settings** (interval ≥6 h, category filter, MQTT, Loxone/JSON). Problems → **Log** tab. See [DISCLAIMER.md](./DISCLAIMER.md).
 
 **Install from URL:** use the **release asset** ZIP link (`…/releases/download/vVERSION/loxberry-plugin-abfallio-VERSION.zip`), not “Source code”. **Pre-releases** (beta builds) live on the same [GitHub Releases](https://github.com/spid3r/loxberry-api-abfall-io/releases) page under **Pre-releases** — e.g. `1.5.0-beta.1` previews the upcoming `1.5.0` stable line. More detail: [docs/DEVELOPER.md](./docs/DEVELOPER.md).
 
@@ -172,14 +194,17 @@ Clone, `npm install`, `npm run typecheck`, `npm test`, `npm run build`. Full gat
 
 ## Configuration
 
-### 1) Location (region, then address)
+### 1) Location (data source, operator, address)
 
-In the *Standort* / *Location* tab:
+In the *Standort* / *Location* tab, first choose the **data source** (radio buttons at the top), then:
 
-- Choose **waste region** (autocomplete) or expert **service key**, then **Save region & settings**
-- **Then** search a street (min. 3 characters)
-- Pick a house number if required
-- **Save location**
+- **api.abfall.io:** choose **waste region** (autocomplete) or expert **service key** → **Save region & settings** →
+  search a street (min. 3 characters) → house number if required → **Save location**
+- **hausmuell.info / Müllabfuhr Deutschland / AWIDO / Abfuhr-Wecker:** choose the portal, district or operator from the
+  list, then click through the address steps (each list has a filter field) → **Save address**. With an address
+  already saved, the tab shows it and only starts a new selection on **Start selection over** or another operator.
+
+Saving a new address on another portal/district clears the category filter (category names differ per operator).
 
 ### 2) Fetch interval & fuzz factor
 
@@ -240,6 +265,12 @@ Polling interval for Loxone: e.g. `3600` (hourly).
 
 ## Architecture
 
+**Providers:** one module per upstream in `src-ts/lib/` — `abfall-service.ts` (api.abfall.io + shared parse/cache/MQTT
+path and provider dispatch), `hausmuell-service.ts`, `muellabfuhr-service.ts`, `awido-service.ts`,
+`offizium-service.ts`. Each offers a `nextStep(state)` address cascade for the admin UI (CLI `hm_step` / `mf_step` /
+`aw_step` / `of_step`) and a fetch that returns ICS for the shared path. The active provider is `provider` in
+`abfall.json` (missing = `abfallio`).
+
 **Stack:** TypeScript (Node 18+), ESM, **esbuild** → `dist-node/cli/`, mirrored to `bin/dist-node/`; `bin/*.cjs` shims. **PHP** admin (`webfrontend/htmlauth/`, `ajax.php`) for UI; optional shell-out to Node CLI. **i18n:** `i18n.php` + `templates/lang/language_*.ini`. **Tests:** Mocha (`test-ts/`); destructive Playwright in `test-e2e/` (opt-in — [docs/DEVELOPER.md](./docs/DEVELOPER.md)).
 
 ### Runtime data flow (simplified)
@@ -251,7 +282,7 @@ flowchart TB
   end
   CFG["$LBHOMEDIR/config/plugins/abfallio/abfall.json"]
   CRON["Cron → fetch.cjs (Node)"]
-  API["api.abfall.io (ICS)"]
+  API["Upstream (by provider): api.abfall.io · hausmuell.info · Müllabfuhr Deutschland · AWIDO · Abfuhr-Wecker → ICS"]
   CACHE["$LBHOMEDIR/data/plugins/abfallio/abfall_data.json"]
   subgraph Out["Outputs"]
     MQTT[MQTT topics]
