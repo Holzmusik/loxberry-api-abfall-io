@@ -270,9 +270,45 @@ switch ($action) {
         json_response(['success' => true]);
         break;
 
+    /* ---- offizium "Abfuhr-Wecker" upstream ---- */
+
+    case 'of_instances':
+        $output = run_api($node, $api_script, ['of_instances']);
+        echo $output ?: json_encode([]);
+        break;
+
+    case 'of_step':
+        $state = (string) ($_POST['state'] ?? $_GET['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['error' => 'Missing or invalid state']);
+        }
+        $output = run_api($node, $api_script, ['of_step', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['error' => 'No response from of_step']);
+        break;
+
+    case 'of_save':
+        $state = (string) ($_POST['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['success' => false, 'error' => 'Missing or invalid state']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['of_save', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from of_save']);
+        break;
+
+    case 'of_reset':
+        $config_file = $plugin_config . '/abfall.json';
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
+        $instance = (string) (($config['offizium'] ?? [])['instance'] ?? '');
+        $config['offizium'] = $instance !== '' ? ['instance' => $instance] : [];
+        file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        json_response(['success' => true]);
+        break;
+
     case 'set_provider':
         $provider = (string) ($_POST['provider'] ?? '');
-        if (!in_array($provider, ['abfallio', 'hausmuell', 'muellabfuhr', 'awido'], true)) {
+        if (!in_array($provider, ['abfallio', 'hausmuell', 'muellabfuhr', 'awido', 'offizium'], true)) {
             json_response(['success' => false, 'error' => 'Unknown provider']);
         }
         abfallio_ensure_plugin_config_dir($plugin_config);

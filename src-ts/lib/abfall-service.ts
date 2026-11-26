@@ -17,6 +17,7 @@ import {
   muellabfuhrLocationLabel,
 } from "./muellabfuhr-service.js";
 import { awidoLocationLabel, customerTitle, fetchAwido, isAwidoAddressComplete, isValidCustomer } from "./awido-service.js";
+import { fetchOffizium, findInstance, isOffiziumAddressComplete, offiziumLocationLabel } from "./offizium-service.js";
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
 import type {
   ApiStatus,
@@ -312,13 +313,13 @@ const PROVIDER_LABEL: Record<ProviderId, string> = {
   hausmuell: "hausmuell.info",
   muellabfuhr: "muellabfuhr-deutschland.de",
   awido: "AWIDO (cubefour)",
+  offizium: "Abfuhr-Wecker (offizium)",
 };
 
 /** Active upstream; configs written before the provider switch existed are abfall.io. */
 export function activeProvider(cfg: PluginConfig): ProviderId {
-  return cfg.provider === "hausmuell" || cfg.provider === "muellabfuhr" || cfg.provider === "awido"
-    ? cfg.provider
-    : "abfallio";
+  const p = cfg.provider;
+  return p === "hausmuell" || p === "muellabfuhr" || p === "awido" || p === "offizium" ? p : "abfallio";
 }
 
 /** True once the chosen upstream has everything it needs to download a calendar. */
@@ -330,6 +331,8 @@ export function isLocationComplete(cfg: PluginConfig): boolean {
       return isMuellabfuhrAddressComplete(cfg.muellabfuhr);
     case "awido":
       return isAwidoAddressComplete(cfg.awido);
+    case "offizium":
+      return isOffiziumAddressComplete(cfg.offizium);
     default:
       return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
   }
@@ -343,9 +346,21 @@ export async function fetchData(config = loadConfig()): Promise<WasteData> {
       return fetchMuellabfuhrData(config);
     case "awido":
       return fetchAwidoData(config);
+    case "offizium":
+      return fetchOffiziumData(config);
     default:
       return fetchAbfallioData(config);
   }
+}
+
+async function fetchOffiziumData(config: PluginConfig): Promise<WasteData> {
+  const of = config.offizium ?? {};
+  if (!isOffiziumAddressComplete(of)) {
+    throw new Error("No Abfuhr-Wecker address configured. On the Location tab, choose the district and your address.");
+  }
+  log.info(`Fetching data from offizium Abfuhr-Wecker: ${findInstance(of.instance)?.title} / ${offiziumLocationLabel(of)}`);
+  const { ics } = await fetchOffizium(of);
+  return finalizeAndCache(config, ics, offiziumLocationLabel(of));
 }
 
 async function fetchAwidoData(config: PluginConfig): Promise<WasteData> {
@@ -529,6 +544,13 @@ export function getStatus(): ApiStatus {
     region_title = has_region ? customerTitle(aw.customer) : "";
     has_street = isAwidoAddressComplete(aw);
     location = awidoLocationLabel(aw);
+  } else if (provider === "offizium") {
+    const of = cfg.offizium ?? {};
+    const inst = findInstance(of.instance);
+    has_region = !!inst;
+    region_title = inst?.title ?? "";
+    has_street = isOffiziumAddressComplete(of);
+    location = offiziumLocationLabel(of);
   } else {
     has_region = key.length > 0;
     const map = loadServiceMap();

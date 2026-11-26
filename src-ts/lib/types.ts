@@ -75,14 +75,28 @@ export interface AwidoConfig {
   hnr?: AwidoPick;
 }
 
+/** One chosen offizium node (Gemeinde / Ortsteil, numeric ids). */
+export interface OffiziumPick {
+  id: string;
+  name: string;
+}
+
+/** Address on an offizium "Abfuhr-Wecker" district (e.g. Landkreis Rhön-Grabfeld). */
+export interface OffiziumConfig {
+  instance?: string;
+  city?: OffiziumPick;
+  area?: OffiziumPick;
+}
+
 /** Which upstream delivers the schedule. Missing = `abfallio` (configs from before 1.6). */
-export type ProviderId = "abfallio" | "hausmuell" | "muellabfuhr" | "awido";
+export type ProviderId = "abfallio" | "hausmuell" | "muellabfuhr" | "awido" | "offizium";
 
 export interface PluginConfig {
   provider?: ProviderId;
   hausmuell?: HausmuellConfig;
   muellabfuhr?: MuellabfuhrConfig;
   awido?: AwidoConfig;
+  offizium?: OffiziumConfig;
   service_key?: string;
   /**
    * Optional https URL: JSON array of { title, url, service_id } or the upstream

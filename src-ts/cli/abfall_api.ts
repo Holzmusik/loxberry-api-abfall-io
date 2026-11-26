@@ -28,7 +28,14 @@ import {
   nextStep as mfNextStep,
   sanitizeMuellabfuhrState,
 } from "../lib/muellabfuhr-service.js";
+import {
+  OFFIZIUM_INSTANCES,
+  isOffiziumAddressComplete,
+  nextStep as ofNextStep,
+  sanitizeOffiziumState,
+} from "../lib/offizium-service.js";
 import { refreshServiceMapToUserFile } from "../lib/service-map-refresh.js";
+import type { ProviderId } from "../lib/types.js";
 import { decodeShellQueryArg } from "../lib/shell-query-arg.js";
 import { searchServiceRegions } from "../lib/service-map.js";
 
@@ -187,13 +194,48 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "of_instances") {
+    printJson(OFFIZIUM_INSTANCES.map(({ id, title, url }) => ({ id, title, url })));
+    return;
+  }
+
+  if (command === "of_step") {
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeOffiziumState(raw ? JSON.parse(raw) : {});
+    if (!state.instance) {
+      printJson({ error: "Unknown district" });
+      process.exit(1);
+    }
+    printJson(await ofNextStep(state));
+    return;
+  }
+
+  if (command === "of_save") {
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const address = sanitizeOffiziumState(raw ? JSON.parse(raw) : {});
+    if (!isOffiziumAddressComplete(address)) {
+      printJson({ success: false, error: "Address incomplete" });
+      process.exit(1);
+    }
+    const prev = loadConfig();
+    const sameRegion = prev.provider === "offizium" && prev.offizium?.instance === address.instance;
+    saveConfig({
+      ...prev,
+      provider: "offizium",
+      offizium: address,
+      ...(sameRegion ? {} : { categories_filter: [] }),
+    });
+    printJson({ success: true, filter_cleared: !sameRegion && (prev.categories_filter?.length ?? 0) > 0 });
+    return;
+  }
+
   if (command === "set_provider") {
     const provider = args[0];
-    if (provider !== "abfallio" && provider !== "hausmuell" && provider !== "muellabfuhr" && provider !== "awido") {
+    if (!["abfallio", "hausmuell", "muellabfuhr", "awido", "offizium"].includes(provider ?? "")) {
       printJson({ success: false, error: "Unknown provider" });
       process.exit(1);
     }
-    saveConfig({ ...loadConfig(), provider });
+    saveConfig({ ...loadConfig(), provider: provider as ProviderId });
     printJson({ success: true });
     return;
   }

@@ -71,6 +71,7 @@ Two upstreams, chosen at the top of the **Location** tab (existing configs stay 
 2. **hausmuell.info** — ATURIS waste-calendar portals (`https://<subdomain>.hausmuell.info/`), see [hausmuell.info portals](#hausmuellinfo-portals).
 3. **Müllabfuhr Deutschland** — customer portal `https://portal.muellabfuhr-deutschland.de/`, see [Müllabfuhr Deutschland](#müllabfuhr-deutschland).
 4. **AWIDO** (cubefour) — waste calendars of 49 districts/towns, often embedded in the operator's own website, see [AWIDO](#awido).
+5. **Abfuhr-Wecker** (offizium) — Landkreis Rhön-Grabfeld, see [Abfuhr-Wecker](#abfuhr-wecker-offizium).
 
 Both deliver ICS that runs through the same parser, category filter, cache, Loxone and MQTT output.
 
@@ -134,6 +135,15 @@ the ICS export.
 [`src-ts/lib/awido-service.ts`](./src-ts/lib/awido-service.ts), derived from the Home Assistant
 [`awido_de` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/awido_de.md)
 (deduplicated) plus Landkreis Haßberge. Among them in Thuringia: Gotha, Saale-Orla, Altenburger Land.
+
+### Abfuhr-Wecker (offizium)
+
+The waste module of offizium's municipal web platform (`<host>/api/modules/abfall/webshow`). Landkreis Rhön-Grabfeld
+uses it for its "Abfuhr-Wecker" — its website only offers a PDF. One request returns the whole district (municipalities,
+districts, dates up to the end of the next year; ~2.8 MB), so the address is Gemeinde → Ortsteil. Recycling-centre
+opening hours (listed as special types) are skipped. Districts: `OFFIZIUM_INSTANCES` in
+[`src-ts/lib/offizium-service.ts`](./src-ts/lib/offizium-service.ts); only Rhön-Grabfeld is known so far (verified
+November 2026), adding another one is a single entry (host + module_division_uuid).
 
 Switching to another portal or district clears the category filter, because category names differ between operators
 ("Restabfall" vs. "Restmüll" …) and a stale filter would hide every category.

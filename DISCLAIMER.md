@@ -6,7 +6,7 @@
 
 ## Deutsch
 
-Dieses Repository enthält ein **LoxBerry-Plugin** zur Anzeige von Abholterminen. Es handelt sich um ein **unabhängiges** Community-Projekt: **keine** offizielle Anwendung der Betreiber der genutzten Abfallkalender-Dienste — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour** — oder verbundener Unternehmen bzw. der jeweiligen Entsorger. Diese nehmen **weder** Stellung zu diesem Projekt **noch** prüfen, vertreiben, befürworten oder unterstützen es.
+Dieses Repository enthält ein **LoxBerry-Plugin** zur Anzeige von Abholterminen. Es handelt sich um ein **unabhängiges** Community-Projekt: **keine** offizielle Anwendung der Betreiber der genutzten Abfallkalender-Dienste — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour**, **Abfuhr-Wecker / offizium** — oder verbundener Unternehmen bzw. der jeweiligen Entsorger. Diese nehmen **weder** Stellung zu diesem Projekt **noch** prüfen, vertreiben, befürworten oder unterstützen es.
  
 ### Kein Support
 
@@ -39,7 +39,7 @@ Genannte Marken und Produktnamen (z. B. LoxBerry, Loxone, abfall.io, hausmuell.i
 
 ## English
 
-This repository provides a **LoxBerry plugin** for waste-collection schedules. It is an **independent** community project, **not** an official app from the operators of the waste-calendar services it uses — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour** — or related companies, or the waste operators themselves. Those parties do **not** review, distribute, endorse, or support this project.
+This repository provides a **LoxBerry plugin** for waste-collection schedules. It is an **independent** community project, **not** an official app from the operators of the waste-calendar services it uses — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour**, **Abfuhr-Wecker / offizium** — or related companies, or the waste operators themselves. Those parties do **not** review, distribute, endorse, or support this project.
 
 ### No support
 
