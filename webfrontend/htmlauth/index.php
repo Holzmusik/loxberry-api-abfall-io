@@ -229,6 +229,30 @@ $waste_plugin_css .= <<<'WASTE_CSS'
 
         .selected-location { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
         .selected-location strong { color: #2e7d32; }
+
+        /* Embedded in the LoxBerry shell, jQuery Mobile theme rules (text colour / text-shadow / input
+           backgrounds) can win over the plugin styles and render labels, number inputs and the category
+           checkboxes white-on-white. The tab content always has a light background, so pin readable colours. */
+        .abfallio-lb-embed .tab-content,
+        .abfallio-lb-embed .tab-content label,
+        .abfallio-lb-embed .tab-content span,
+        .abfallio-lb-embed .tab-content p,
+        .abfallio-lb-embed .tab-content li,
+        .abfallio-lb-embed .tab-content td { text-shadow: none !important; }
+        .abfallio-lb-embed .tab-content { color: #333 !important; }
+        .abfallio-lb-embed .form-group > label { color: #555 !important; }
+        .abfallio-lb-embed .category-filter-checkboxes label,
+        .abfallio-lb-embed .category-filter-checkboxes span,
+        .abfallio-lb-embed .abfallio-provider-switch label span { color: #333 !important; }
+        .abfallio-lb-embed .tab-content .ui-input-text,
+        .abfallio-lb-embed .tab-content input[type="text"],
+        .abfallio-lb-embed .tab-content input[type="number"],
+        .abfallio-lb-embed .tab-content input[type="password"],
+        .abfallio-lb-embed .tab-content select { background-color: #fff !important; color: #333 !important; text-shadow: none !important; }
+        .abfallio-lb-embed .tab-content .ui-input-text { border: 1px solid #ddd !important; box-shadow: none !important; }
+        .abfallio-lb-embed .tab-content .ui-input-text input { border: none !important; }
+        .abfallio-lb-embed .category-filter-checkboxes input[type="checkbox"],
+        .abfallio-lb-embed .abfallio-provider-switch input[type="radio"] { accent-color: #2e7d32; }
 WASTE_CSS;
 
 if ($use_loxberry_frame) {
