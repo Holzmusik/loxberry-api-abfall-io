@@ -17,6 +17,11 @@
 [![Playwright](https://img.shields.io/badge/Playwright-e2e-45ba4b?logo=playwright&logoColor=white)](./test-e2e/)
 [![LoxBerry](https://img.shields.io/badge/LoxBerry-3.x-2d2d2d)](https://wiki.loxberry.de/)
 
+> **Fork notice:** this is a fork of [spid3r/loxberry-api-abfall-io](https://github.com/spid3r/loxberry-api-abfall-io)
+> that adds four data sources (hausmuell.info, Müllabfuhr Deutschland, AWIDO, Abfuhr-Wecker). Releases of the fork:
+> [Holzmusik/loxberry-api-abfall-io/releases](https://github.com/Holzmusik/loxberry-api-abfall-io/releases); the
+> plugin's auto-update follows `release.cfg` on branch `fork`. Install links further below point to the original project.
+
 LoxBerry 3 plugin that retrieves waste-collection schedules straight from your waste operator's public calendar
 and exposes them as JSON, flat-text (Loxone) and MQTT topics. Five upstreams are supported:
 
