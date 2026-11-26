@@ -230,31 +230,35 @@ $waste_plugin_css .= <<<'WASTE_CSS'
         .selected-location { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
         .selected-location strong { color: #2e7d32; }
 
-        /* Embedded in the LoxBerry shell, jQuery Mobile theme rules (text colour / text-shadow / input
-           backgrounds) can win over the plugin styles and render labels, number inputs and the category
-           checkboxes white-on-white. The tab content always has a light background, so pin readable colours. */
-        .abfallio-lb-embed .tab-content,
-        .abfallio-lb-embed .tab-content label,
-        .abfallio-lb-embed .tab-content span,
-        .abfallio-lb-embed .tab-content p,
-        .abfallio-lb-embed .tab-content li,
-        .abfallio-lb-embed .tab-content td { text-shadow: none !important; }
-        .abfallio-lb-embed .tab-content { color: #333 !important; }
-        .abfallio-lb-embed .form-group > label,
-        #tab-location .form-group > label,
-        #tab-settings .form-group > label { color: #555 !important; text-shadow: none !important; }
-        .abfallio-lb-embed .category-filter-checkboxes label,
-        .abfallio-lb-embed .category-filter-checkboxes span,
-        .abfallio-lb-embed .abfallio-provider-switch label span { color: #333 !important; }
-        .abfallio-lb-embed .tab-content .ui-input-text,
-        .abfallio-lb-embed .tab-content input[type="text"],
-        .abfallio-lb-embed .tab-content input[type="number"],
-        .abfallio-lb-embed .tab-content input[type="password"],
-        .abfallio-lb-embed .tab-content select { background-color: #fff !important; color: #333 !important; text-shadow: none !important; }
-        .abfallio-lb-embed .tab-content .ui-input-text { border: 1px solid #ddd !important; box-shadow: none !important; }
-        .abfallio-lb-embed .tab-content .ui-input-text input { border: none !important; }
-        .abfallio-lb-embed .category-filter-checkboxes input[type="checkbox"],
-        .abfallio-lb-embed .abfallio-provider-switch input[type="radio"] { accent-color: #2e7d32; }
+        /* LoxBerry 3 themes (theme-dark, theme-glass) recolour labels and jQuery Mobile inputs for a dark
+           page (e.g. `body.theme-glass .ui-input-text input { color: rgba(255,255,255,.8) !important }`).
+           The plugin panels are always light, so pin readable colours. Anchored on the container id so the
+           rules out-rank any class-based theme selector. */
+        #abfallio-root .tab-content,
+        #abfallio-root .tab-content label,
+        #abfallio-root .tab-content span,
+        #abfallio-root .tab-content p,
+        #abfallio-root .tab-content li,
+        #abfallio-root .tab-content td,
+        #abfallio-root .tab-content th { text-shadow: none !important; }
+        #abfallio-root .tab-content { color: #333 !important; }
+        #abfallio-root .tab-content .form-group > label { color: #555 !important; }
+        #abfallio-root .category-filter-checkboxes label,
+        #abfallio-root .category-filter-checkboxes span,
+        #abfallio-root .abfallio-provider-switch label span { color: #333 !important; }
+        #abfallio-root .tab-content .ui-input-text { background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; }
+        #abfallio-root .tab-content input[type="text"],
+        #abfallio-root .tab-content input[type="number"],
+        #abfallio-root .tab-content input[type="password"],
+        #abfallio-root .tab-content textarea,
+        #abfallio-root .tab-content select {
+            background: #fff !important; color: #333 !important; -webkit-text-fill-color: #333 !important; text-shadow: none !important;
+        }
+        #abfallio-root .tab-content input[readonly] { background: #f8f9fa !important; }
+        #abfallio-root .tab-content input::placeholder { color: #999 !important; -webkit-text-fill-color: #999 !important; }
+        #abfallio-root .tab-content .ui-input-text input { border: none !important; }
+        #abfallio-root .category-filter-checkboxes input[type="checkbox"],
+        #abfallio-root .abfallio-provider-switch input[type="radio"] { accent-color: #2e7d32; }
 WASTE_CSS;
 
 if ($use_loxberry_frame) {
@@ -298,7 +302,7 @@ if ($use_loxberry_frame) {
 <?php
 }
 ?>
-<div class="plugin-container<?= $use_loxberry_frame ? ' abfallio-lb-embed' : '' ?>" data-active-tab="<?= htmlspecialchars($tab, ENT_QUOTES, 'UTF-8') ?>">
+<div id="abfallio-root" class="plugin-container<?= $use_loxberry_frame ? ' abfallio-lb-embed' : '' ?>" data-active-tab="<?= htmlspecialchars($tab, ENT_QUOTES, 'UTF-8') ?>">
     <div class="plugin-header">
         <img src="icon_64.png" alt="<?= htmlspecialchars(AbfallioI18N::t('COMMON', 'PLUGIN_TITLE')) ?>" onerror="this.style.display='none'">
         <div>
