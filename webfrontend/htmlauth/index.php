@@ -601,7 +601,7 @@ if (!$use_loxberry_frame) {
         </details>
 
         <div class="form-group" style="margin-bottom:1rem;">
-            <button type="button" class="btn btn-primary" id="btn-save-config-from-location" onclick="saveSettings('tab-location')"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_SAVE_CONFIG')) ?></button>
+            <button type="button" class="btn btn-primary" id="btn-save-config-from-location" onclick="saveSettings('tab-location', null, this)"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_SAVE_CONFIG')) ?></button>
             <button type="button" class="btn btn-secondary" id="btn-reset-region" onclick="resetRegion()"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_RESET_REGION')) ?></button>
             <small style="display:block; margin-top:0.5em; color:#555;"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'HELP_SAVE_CONFIG')) ?></small>
             <small style="display:block; margin-top:0.35em; color:#666;"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'HELP_RESET_REGION')) ?></small>
@@ -735,7 +735,7 @@ if (!$use_loxberry_frame) {
             </div>
         </div>
 
-        <button class="btn btn-primary" onclick="saveSettings()"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'BTN_SAVE')) ?></button>
+        <button class="btn btn-primary" id="btn-save-settings" onclick="saveSettings(null, null, this)"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'BTN_SAVE')) ?></button>
 
         <h3 class="section-title"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'SECTION_LOXONE')) ?></h3>
 
@@ -1340,8 +1340,10 @@ function hmPick(item) {
 
 function hmSave() {
     if (!hmState) return;
+    var done = abfallioButtonBusy(document.getElementById('btn-hm-save'));
     abfallioPostForm({ action: 'hm_save', state: JSON.stringify(hmState) })
         .then(function(resp) {
+            done(!!(resp && resp.success));
             if (resp && resp.success) {
                 showAlert('tab-location', tt('HAUSMUELL', 'MSG_SAVED'), 'success');
                 setTimeout(function() {
@@ -1504,8 +1506,10 @@ function mfPick(item) {
 
 function mfSave() {
     if (!mfState) return;
+    var done = abfallioButtonBusy(document.getElementById('btn-mf-save'));
     abfallioPostForm({ action: 'mf_save', state: JSON.stringify(mfState) })
         .then(function(resp) {
+            done(!!(resp && resp.success));
             if (resp && resp.success) {
                 showAlert('tab-location', tt('HAUSMUELL', 'MSG_SAVED'), 'success');
                 setTimeout(function() {
@@ -1570,8 +1574,36 @@ function refreshServiceMapList() {
         });
 }
 
-function saveSettings(alertTab, onSuccess) {
+/**
+ * Inline feedback on the clicked button (the tab-level alert is at the top of a long page and
+ * easy to miss): "Saving…" while busy, then green "✓ Saved" / red "✗ Error" for a few seconds.
+ * Returns a function(ok) to call when the request has finished.
+ */
+function abfallioButtonBusy(btn) {
+    if (!btn || !btn.tagName) return function() {};
+    if (!btn.getAttribute('data-label')) btn.setAttribute('data-label', btn.textContent);
+    var label = btn.getAttribute('data-label');
+    clearTimeout(btn._abfallioTimer);
+    btn.disabled = true;
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.textContent = tt('COMMON', 'BTN_SAVING', 'Speichern…');
+    return function(ok) {
+        btn.disabled = false;
+        btn.textContent = ok ? tt('COMMON', 'BTN_SAVED', '✓ Gespeichert') : tt('COMMON', 'BTN_SAVE_FAILED', '✗ Fehler');
+        btn.style.setProperty('background', ok ? '#2e7d32' : '#c62828', 'important');
+        btn.style.setProperty('color', '#fff', 'important');
+        btn._abfallioTimer = setTimeout(function() {
+            btn.textContent = label;
+            btn.style.background = '';
+            btn.style.color = '';
+        }, 3000);
+    };
+}
+
+function saveSettings(alertTab, onSuccess, btn) {
     var tab = alertTab || 'tab-settings';
+    var done = abfallioButtonBusy(btn);
     var filter = document.getElementById('categories-filter').value.trim();
     var filterArr = filter ? filter.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
     abfallioPostForm({
@@ -1591,11 +1623,13 @@ function saveSettings(alertTab, onSuccess) {
     })
         .then(function(resp) {
             if (resp.success) {
+                done(true);
                 showAlert(tab, tt('SETTINGS', 'MSG_SAVED'), 'success');
                 if (typeof onSuccess === 'function') {
                     onSuccess();
                 }
             } else {
+                done(false);
                 var err = (resp.error || 'Unknown');
                 if (resp.code === 'service_key') {
                     err = tt('SETTINGS', 'MSG_SERVICE_KEY_INVALID');
@@ -1604,6 +1638,7 @@ function saveSettings(alertTab, onSuccess) {
             }
         })
         .catch(function() {
+            done(false);
             showAlert(tab, tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error');
         });
 }
