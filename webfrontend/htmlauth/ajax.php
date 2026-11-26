@@ -428,6 +428,7 @@ switch ($action) {
         if ($sk !== '' && !preg_match('/^[a-fA-F0-9]{32}$/', $sk)) {
             json_response(['success' => false, 'error' => 'Invalid service key', 'code' => 'service_key']);
         }
+        $old_sk = strtolower((string) ($config['service_key'] ?? ''));
         $config['service_key'] = $sk === '' ? '' : strtolower($sk);
         if ($sk === '') {
             $config['location'] = [];
@@ -436,6 +437,10 @@ switch ($action) {
         $config['fetch_fuzz_minutes'] = max(0, min(360, intval($_POST['fetch_fuzz_minutes'] ?? 30)));
         $filter_raw = $_POST['categories_filter'] ?? '[]';
         $config['categories_filter'] = json_decode($filter_raw, true) ?: [];
+        // Another abfall.io region (key) has different category names: drop the old filter.
+        if ($old_sk !== '' && $config['service_key'] !== $old_sk) {
+            $config['categories_filter'] = [];
+        }
 
         $config['mqtt'] = $config['mqtt'] ?? [];
         $config['mqtt']['enabled'] = !empty($_POST['mqtt_enabled']) && $_POST['mqtt_enabled'] !== '0';
