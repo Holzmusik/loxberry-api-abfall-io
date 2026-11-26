@@ -69,6 +69,7 @@ Two upstreams, chosen at the top of the **Location** tab (existing configs stay 
 
 1. **api.abfall.io** (default) — see below.
 2. **hausmuell.info** — ATURIS waste-calendar portals (`https://<subdomain>.hausmuell.info/`), see [hausmuell.info portals](#hausmuellinfo-portals).
+3. **Müllabfuhr Deutschland** — customer portal `https://portal.muellabfuhr-deutschland.de/`, see [Müllabfuhr Deutschland](#müllabfuhr-deutschland).
 
 Both deliver ICS that runs through the same parser, category filter, cache, Loxone and MQTT output.
 
@@ -107,6 +108,21 @@ different proxy-based flow); Erfurt has moved off the platform. Portal list: `HA
 [`src-ts/lib/hausmuell-service.ts`](./src-ts/lib/hausmuell-service.ts) — the ATURIS frontends differ between portals
 (three generations), the module documents how each is handled. Same community knowledge as the Home Assistant
 [`hausmuell_info` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/hausmuell_info.md).
+
+### Müllabfuhr Deutschland
+
+Pick the district, then click through the portal's location tree (Ort → Ortsteil → Straße; each node says whether it is
+final). The district list is read live from the portal (`/api-portal/mandators`), so newly connected districts appear
+automatically. Dates come from the JSON pickups endpoint; the next year is added from the portal's ICS export
+(`/pickups/ics?year=…&fractionIds=…`) once published. Fraction ids are remembered in the config for that export.
+
+In November 2026 the portal served 7 districts, all verified end-to-end: Landkreis Hildburghausen, Weimarer Land,
+Landkreis Sömmerda, Landkreis Wittenberg, Burgenlandkreis, Dessau-Roßlau, Saalekreis. Module:
+[`src-ts/lib/muellabfuhr-service.ts`](./src-ts/lib/muellabfuhr-service.ts) (same API as the Home Assistant
+[`muellabfuhr_de` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/muellabfuhr_de.md)).
+
+Switching to another portal or district clears the category filter, because category names differ between operators
+("Restabfall" vs. "Restmüll" …) and a stale filter would hide every category.
 
 ## Public help page and languages
 

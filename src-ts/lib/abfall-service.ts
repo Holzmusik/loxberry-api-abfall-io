@@ -10,6 +10,12 @@ import {
   isValidSubdomain,
   providerTitle,
 } from "./hausmuell-service.js";
+import {
+  fetchMuellabfuhr,
+  isMuellabfuhrAddressComplete,
+  isValidMandatorId,
+  muellabfuhrLocationLabel,
+} from "./muellabfuhr-service.js";
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
 import type {
   ApiStatus,
@@ -300,24 +306,53 @@ export function inferKommuneFromStreetId(streetId: string): string {
   return match ? match[1] : "";
 }
 
+const PROVIDER_LABEL: Record<ProviderId, string> = {
+  abfallio: "api.abfall.io",
+  hausmuell: "hausmuell.info",
+  muellabfuhr: "muellabfuhr-deutschland.de",
+};
+
 /** Active upstream; configs written before the provider switch existed are abfall.io. */
 export function activeProvider(cfg: PluginConfig): ProviderId {
-  return cfg.provider === "hausmuell" ? "hausmuell" : "abfallio";
+  return cfg.provider === "hausmuell" || cfg.provider === "muellabfuhr" ? cfg.provider : "abfallio";
 }
 
 /** True once the chosen upstream has everything it needs to download a calendar. */
 export function isLocationComplete(cfg: PluginConfig): boolean {
-  if (activeProvider(cfg) === "hausmuell") {
-    return isHausmuellAddressComplete(cfg.hausmuell);
+  switch (activeProvider(cfg)) {
+    case "hausmuell":
+      return isHausmuellAddressComplete(cfg.hausmuell);
+    case "muellabfuhr":
+      return isMuellabfuhrAddressComplete(cfg.muellabfuhr);
+    default:
+      return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
   }
-  return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
 }
 
 export async function fetchData(config = loadConfig()): Promise<WasteData> {
-  if (activeProvider(config) === "hausmuell") {
-    return fetchHausmuellData(config);
+  switch (activeProvider(config)) {
+    case "hausmuell":
+      return fetchHausmuellData(config);
+    case "muellabfuhr":
+      return fetchMuellabfuhrData(config);
+    default:
+      return fetchAbfallioData(config);
   }
-  return fetchAbfallioData(config);
+}
+
+async function fetchMuellabfuhrData(config: PluginConfig): Promise<WasteData> {
+  const mf = config.muellabfuhr ?? {};
+  if (!isMuellabfuhrAddressComplete(mf)) {
+    throw new Error(
+      "No muellabfuhr-deutschland.de address configured. On the Location tab, choose the district and select your address.",
+    );
+  }
+  log.info(`Fetching data from portal.muellabfuhr-deutschland.de: ${mf.mandator?.name} / ${muellabfuhrLocationLabel(mf)}`);
+  const { ics, config: updated } = await fetchMuellabfuhr(mf);
+  if ((updated.fraction_ids ?? []).join(",") !== (mf.fraction_ids ?? []).join(",")) {
+    saveConfig({ ...loadConfig(), muellabfuhr: updated });
+  }
+  return finalizeAndCache(config, ics, muellabfuhrLocationLabel(mf));
 }
 
 async function fetchHausmuellData(config: PluginConfig): Promise<WasteData> {
@@ -464,6 +499,12 @@ export function getStatus(): ApiStatus {
     region_title = has_region ? providerTitle(hm.subdomain) : "";
     has_street = isHausmuellAddressComplete(hm);
     location = hausmuellLocationLabel(hm);
+  } else if (provider === "muellabfuhr") {
+    const mf = cfg.muellabfuhr ?? {};
+    has_region = isValidMandatorId(mf.mandator?.id);
+    region_title = has_region ? mf.mandator?.name || `#${mf.mandator?.id}` : "";
+    has_street = isMuellabfuhrAddressComplete(mf);
+    location = muellabfuhrLocationLabel(mf);
   } else {
     has_region = key.length > 0;
     const map = loadServiceMap();
@@ -475,7 +516,7 @@ export function getStatus(): ApiStatus {
     cookie_status: "not_needed",
     cookie_created: "",
     cookie_expires: "",
-    client_id: provider === "hausmuell" ? "(hausmuell.info - no registration)" : "(api.abfall.io - no registration)",
+    client_id: `(${PROVIDER_LABEL[provider]} - no registration)`,
     last_fetch: cached.timestamp ?? "",
     next_fetch_due: cached.next_fetch_due ?? "",
     location,
@@ -486,7 +527,7 @@ export function getStatus(): ApiStatus {
     termine_count: Object.keys(cached.termine ?? {}).length,
     cached_data: cachedData,
     /** Single upstream; value is for display. Schedules are fetched as an ICS calendar in the background. */
-    api_mode: provider === "hausmuell" ? "hausmuell.info" : "api.abfall.io",
+    api_mode: PROVIDER_LABEL[provider],
     mqtt: mqttStatus,
     install_cron: readMergedCronInstallProbe(),
     service_map: { source: sm.source, count: sm.count },

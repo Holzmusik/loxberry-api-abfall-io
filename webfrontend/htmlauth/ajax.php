@@ -196,9 +196,46 @@ switch ($action) {
         json_response(['success' => true]);
         break;
 
+    /* ---- portal.muellabfuhr-deutschland.de upstream ---- */
+
+    case 'mf_mandators':
+        $output = run_api($node, $api_script, ['mf_mandators']);
+        echo $output ?: json_encode([]);
+        break;
+
+    case 'mf_step':
+        $state = (string) ($_POST['state'] ?? $_GET['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['error' => 'Missing or invalid state']);
+        }
+        $output = run_api($node, $api_script, ['mf_step', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['error' => 'No response from mf_step']);
+        break;
+
+    case 'mf_save':
+        $state = (string) ($_POST['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['success' => false, 'error' => 'Missing or invalid state']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['mf_save', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from mf_save']);
+        break;
+
+    case 'mf_reset':
+        // Forget the address but keep the chosen district.
+        $config_file = $plugin_config . '/abfall.json';
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
+        $mandator = ($config['muellabfuhr'] ?? [])['mandator'] ?? null;
+        $config['muellabfuhr'] = is_array($mandator) ? ['mandator' => $mandator] : [];
+        file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        json_response(['success' => true]);
+        break;
+
     case 'set_provider':
         $provider = (string) ($_POST['provider'] ?? '');
-        if (!in_array($provider, ['abfallio', 'hausmuell'], true)) {
+        if (!in_array($provider, ['abfallio', 'hausmuell', 'muellabfuhr'], true)) {
             json_response(['success' => false, 'error' => 'Unknown provider']);
         }
         abfallio_ensure_plugin_config_dir($plugin_config);

@@ -44,12 +44,29 @@ export interface HausmuellConfig {
   zusatz_id?: string;
 }
 
+/** One node chosen on portal.muellabfuhr-deutschland.de (district or location UUID). */
+export interface MuellabfuhrPick {
+  id: string;
+  name: string;
+}
+
+/** Address on portal.muellabfuhr-deutschland.de. */
+export interface MuellabfuhrConfig {
+  /** District ("mandator"), e.g. { id: "7", name: "Landkreis Hildburghausen" }. */
+  mandator?: MuellabfuhrPick;
+  /** Chosen location nodes from the root down (Ort, Ortsteil, Straße); the last one is used. */
+  path?: MuellabfuhrPick[];
+  /** Fraction ids seen so far (needed for the next-year ICS export). */
+  fraction_ids?: string[];
+}
+
 /** Which upstream delivers the schedule. Missing = `abfallio` (configs from before 1.6). */
-export type ProviderId = "abfallio" | "hausmuell";
+export type ProviderId = "abfallio" | "hausmuell" | "muellabfuhr";
 
 export interface PluginConfig {
   provider?: ProviderId;
   hausmuell?: HausmuellConfig;
+  muellabfuhr?: MuellabfuhrConfig;
   service_key?: string;
   /**
    * Optional https URL: JSON array of { title, url, service_id } or the upstream

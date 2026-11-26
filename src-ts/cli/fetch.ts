@@ -18,9 +18,9 @@ async function main(): Promise<void> {
   log.info(`Waste collection fetch started${force ? " (forced)" : ""}`);
 
   const config = loadConfig();
-  if (activeProvider(config) === "hausmuell") {
+  if (activeProvider(config) !== "abfallio") {
     if (!isLocationComplete(config)) {
-      log.warn("No hausmuell.info address configured — open the plugin admin, Location tab, choose the portal and your address. Skipping fetch.");
+      log.warn(`No ${activeProvider(config)} address configured — open the plugin admin, Location tab, choose the portal/district and your address. Skipping fetch.`);
       return;
     }
   } else {

@@ -16,6 +16,12 @@ import {
   nextStep,
   sanitizeHausmuellState,
 } from "../lib/hausmuell-service.js";
+import {
+  isMuellabfuhrAddressComplete,
+  listMandators,
+  nextStep as mfNextStep,
+  sanitizeMuellabfuhrState,
+} from "../lib/muellabfuhr-service.js";
 import { refreshServiceMapToUserFile } from "../lib/service-map-refresh.js";
 import { decodeShellQueryArg } from "../lib/shell-query-arg.js";
 import { searchServiceRegions } from "../lib/service-map.js";
@@ -30,7 +36,8 @@ async function main(): Promise<void> {
     process.stdout.write(`Usage: ${process.argv[1]} <command> [args]\n`);
     process.stdout.write(
       "Commands: search_street <q>, search_hnr <street_id>, search_service <q>, refresh_service_map [url], " +
-        "hm_providers, hm_step <state_json>, fetch, status, log\n",
+        "hm_providers, hm_step <state_json>, hm_save <state_json>, mf_mandators, mf_step <state_json>, " +
+        "mf_save <state_json>, set_provider <id>, fetch, status, log\n",
     );
     process.exit(1);
   }
@@ -87,14 +94,59 @@ async function main(): Promise<void> {
       printJson({ success: false, error: "Address incomplete" });
       process.exit(1);
     }
-    saveConfig({ ...loadConfig(), provider: "hausmuell", hausmuell: address });
-    printJson({ success: true });
+    const prev = loadConfig();
+    const sameRegion = prev.provider === "hausmuell" && prev.hausmuell?.subdomain === address.subdomain;
+    saveConfig({
+      ...prev,
+      provider: "hausmuell",
+      hausmuell: address,
+      // Category names differ per portal; a stale filter would hide every category.
+      ...(sameRegion ? {} : { categories_filter: [] }),
+    });
+    printJson({ success: true, filter_cleared: !sameRegion && (prev.categories_filter?.length ?? 0) > 0 });
+    return;
+  }
+
+  if (command === "mf_mandators") {
+    printJson(await listMandators());
+    return;
+  }
+
+  if (command === "mf_step") {
+    // mf_step b64:<MuellabfuhrState JSON> → next level of the location tree, or done.
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeMuellabfuhrState(raw ? JSON.parse(raw) : {});
+    if (!state.mandator) {
+      printJson({ error: "Invalid district" });
+      process.exit(1);
+    }
+    printJson(await mfNextStep(state));
+    return;
+  }
+
+  if (command === "mf_save") {
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const { mandator, path } = sanitizeMuellabfuhrState(raw ? JSON.parse(raw) : {});
+    const address = { mandator, path };
+    if (!isMuellabfuhrAddressComplete(address)) {
+      printJson({ success: false, error: "Address incomplete" });
+      process.exit(1);
+    }
+    const prev = loadConfig();
+    const sameRegion = prev.provider === "muellabfuhr" && prev.muellabfuhr?.mandator?.id === mandator?.id;
+    saveConfig({
+      ...prev,
+      provider: "muellabfuhr",
+      muellabfuhr: address,
+      ...(sameRegion ? {} : { categories_filter: [] }),
+    });
+    printJson({ success: true, filter_cleared: !sameRegion && (prev.categories_filter?.length ?? 0) > 0 });
     return;
   }
 
   if (command === "set_provider") {
     const provider = args[0];
-    if (provider !== "abfallio" && provider !== "hausmuell") {
+    if (provider !== "abfallio" && provider !== "hausmuell" && provider !== "muellabfuhr") {
       printJson({ success: false, error: "Unknown provider" });
       process.exit(1);
     }
