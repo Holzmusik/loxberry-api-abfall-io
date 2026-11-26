@@ -6,11 +6,11 @@
 
 ## Deutsch
 
-Dieses Repository enthält ein **LoxBerry-Plugin** zur Anzeige von Abholterminen. Es handelt sich um ein **unabhängiges** Community-Projekt: **keine** offizielle Anwendung der Betreiber von **api.abfall.io**, **AbfallPlus** oder verbundener Unternehmen. Diese nehmen **weder** Stellung zu diesem Projekt **noch** prüfen, vertreiben, befürworten oder unterstützen es.
+Dieses Repository enthält ein **LoxBerry-Plugin** zur Anzeige von Abholterminen. Es handelt sich um ein **unabhängiges** Community-Projekt: **keine** offizielle Anwendung der Betreiber der genutzten Abfallkalender-Dienste — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour** — oder verbundener Unternehmen bzw. der jeweiligen Entsorger. Diese nehmen **weder** Stellung zu diesem Projekt **noch** prüfen, vertreiben, befürworten oder unterstützen es.
  
 ### Kein Support
 
-- Es gibt **keinen** Anspruch auf technischen Support durch die Anbieter der API, durch AbfallPlus o. Ä.
+- Es gibt **keinen** Anspruch auf technischen Support durch die Betreiber dieser Dienste oder durch die Entsorger.
 - Die **Maintainer dieses Repos** bieten **keinen** verbindlichen Support für Endanwender an (best effort / Open-Source nach Verfügbarkeit).
 - **Du** bist für die Nutzung in deiner Installation **selbst verantwortlich**.
 
@@ -29,21 +29,21 @@ Bitte das Intervall **nicht** künstlich umgehen oder extern so pollen, dass Ser
 
 ### Verfügbarkeit
 
-Die Dienste können **Inhalte, Formate oder Erreichbarkeit jederzeit ändern, einschränken oder beenden**. Es gibt **keine** Garantie auf dauerhafte Funktion. Die Nutzung erfolgt auf **eigenes Risiko**.
+Die Dienste können **Inhalte, Formate oder Erreichbarkeit jederzeit ändern, einschränken oder beenden**. Es gibt **keine** Garantie auf dauerhafte Funktion. Maßgeblich sind immer die Angaben deines Entsorgers. Die Nutzung erfolgt auf **eigenes Risiko**.
 
 ### Marken
 
-Genannte Marken und Produktnamen (z. B. LoxBerry, Loxone, abfall.io) gehören den jeweiligen Rechteinhabern.
+Genannte Marken und Produktnamen (z. B. LoxBerry, Loxone, abfall.io, hausmuell.info, AWIDO) gehören den jeweiligen Rechteinhabern.
 
 ---
 
 ## English
 
-This repository provides a **LoxBerry plugin** for waste-collection schedules. It is an **independent** community project, **not** an official app from the operators of **api.abfall.io**, **AbfallPlus**, or related companies. Those parties do **not** review, distribute, endorse, or support this project.
+This repository provides a **LoxBerry plugin** for waste-collection schedules. It is an **independent** community project, **not** an official app from the operators of the waste-calendar services it uses — **api.abfall.io / AbfallPlus**, **hausmuell.info / ATURIS**, **portal.muellabfuhr-deutschland.de**, **AWIDO / cubefour** — or related companies, or the waste operators themselves. Those parties do **not** review, distribute, endorse, or support this project.
 
 ### No support
 
-- There is **no** entitlement to technical support from the API operators or AbfallPlus.
+- There is **no** entitlement to technical support from the operators of these services or from the waste operators.
 - **Repository maintainers** do **not** guarantee end-user support (best effort / open source as time allows).
 - **You** are responsible for how you use the plugin on your system.
 
@@ -62,8 +62,8 @@ Do not bypass the interval in ways that would disproportionately load upstream s
 
 ### Availability
 
-Services may **change or discontinue** content, formats, or availability **at any time**. There is **no** warranty of continued operation. Use is **at your own risk**.
+Services may **change or discontinue** content, formats, or availability **at any time**. There is **no** warranty of continued operation. Your operator's own information always prevails. Use is **at your own risk**.
 
 ### Trademarks
 
-Named brands (e.g. LoxBerry, Loxone, abfall.io) belong to their respective owners.
+Named brands (e.g. LoxBerry, Loxone, abfall.io, hausmuell.info, AWIDO) belong to their respective owners.
