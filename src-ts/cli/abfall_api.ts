@@ -9,6 +9,13 @@ import {
   searchHnr,
   searchStreet,
 } from "../lib/abfall-service.js";
+import {
+  HAUSMUELL_PROVIDERS,
+  isHausmuellAddressComplete,
+  isValidSubdomain,
+  nextStep,
+  sanitizeHausmuellState,
+} from "../lib/hausmuell-service.js";
 import { refreshServiceMapToUserFile } from "../lib/service-map-refresh.js";
 import { decodeShellQueryArg } from "../lib/shell-query-arg.js";
 import { searchServiceRegions } from "../lib/service-map.js";
@@ -22,7 +29,8 @@ async function main(): Promise<void> {
   if (!command) {
     process.stdout.write(`Usage: ${process.argv[1]} <command> [args]\n`);
     process.stdout.write(
-      "Commands: search_street <q>, search_hnr <street_id>, search_service <q>, refresh_service_map [url], fetch, status, log\n",
+      "Commands: search_street <q>, search_hnr <street_id>, search_service <q>, refresh_service_map [url], " +
+        "hm_providers, hm_step <state_json>, fetch, status, log\n",
     );
     process.exit(1);
   }
@@ -51,6 +59,47 @@ async function main(): Promise<void> {
     if (!result.success) {
       process.exit(1);
     }
+    return;
+  }
+
+  if (command === "hm_providers") {
+    printJson(HAUSMUELL_PROVIDERS);
+    return;
+  }
+
+  if (command === "hm_step") {
+    // hm_step b64:<HausmuellState JSON> → next cascade level with its full list, or done.
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeHausmuellState(raw ? JSON.parse(raw) : {});
+    if (!isValidSubdomain(state.subdomain)) {
+      printJson({ error: "Invalid subdomain" });
+      process.exit(1);
+    }
+    printJson(await nextStep(state));
+    return;
+  }
+
+  if (command === "hm_save") {
+    // hm_save b64:<HausmuellState JSON> → store address and switch provider to hausmuell.info
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const { ort_has_ortsteile: _flag, ...address } = sanitizeHausmuellState(raw ? JSON.parse(raw) : {});
+    if (!isHausmuellAddressComplete(address)) {
+      printJson({ success: false, error: "Address incomplete" });
+      process.exit(1);
+    }
+    saveConfig({ ...loadConfig(), provider: "hausmuell", hausmuell: address });
+    printJson({ success: true });
+    return;
+  }
+
+  if (command === "set_provider") {
+    const provider = args[0];
+    if (provider !== "abfallio" && provider !== "hausmuell") {
+      printJson({ success: false, error: "Unknown provider" });
+      process.exit(1);
+    }
+    saveConfig({ ...loadConfig(), provider });
+    printJson({ success: true });
     return;
   }
 

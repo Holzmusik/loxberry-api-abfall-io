@@ -158,6 +158,54 @@ switch ($action) {
         echo $output ?: json_encode([]);
         break;
 
+    /* ---- hausmuell.info (ATURIS) upstream ---- */
+
+    case 'hm_providers':
+        $output = run_api($node, $api_script, ['hm_providers']);
+        echo $output ?: json_encode([]);
+        break;
+
+    case 'hm_step':
+        // state: JSON of the address chosen so far ({subdomain, ort, ortsteil, strasse, hnr, egebiet, ...})
+        $state = (string) ($_POST['state'] ?? $_GET['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['error' => 'Missing or invalid state']);
+        }
+        $output = run_api($node, $api_script, ['hm_step', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['error' => 'No response from hm_step']);
+        break;
+
+    case 'hm_save':
+        $state = (string) ($_POST['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['success' => false, 'error' => 'Missing or invalid state']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['hm_save', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from hm_save']);
+        break;
+
+    case 'hm_reset':
+        // Forget the address but keep the chosen portal.
+        $config_file = $plugin_config . '/abfall.json';
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
+        $sub = (string) (($config['hausmuell'] ?? [])['subdomain'] ?? '');
+        $config['hausmuell'] = $sub !== '' ? ['subdomain' => $sub] : [];
+        file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        json_response(['success' => true]);
+        break;
+
+    case 'set_provider':
+        $provider = (string) ($_POST['provider'] ?? '');
+        if (!in_array($provider, ['abfallio', 'hausmuell'], true)) {
+            json_response(['success' => false, 'error' => 'Unknown provider']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['set_provider', $provider]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from set_provider']);
+        break;
+
     case 'register':
         $output = run_api($node, $api_script, ['register']);
         echo $output ?: json_encode(['error' => 'Registration failed']);

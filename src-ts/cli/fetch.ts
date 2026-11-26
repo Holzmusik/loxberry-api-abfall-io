@@ -1,5 +1,12 @@
 #!/usr/bin/env node
-import { configuredServiceKey, fetchData, loadConfig, shouldFetch } from "../lib/abfall-service.js";
+import {
+  activeProvider,
+  configuredServiceKey,
+  fetchData,
+  isLocationComplete,
+  loadConfig,
+  shouldFetch,
+} from "../lib/abfall-service.js";
 import { log } from "../lib/logger.js";
 import { rotateLogFileIfNeeded } from "../lib/log-rotate.js";
 import { resolvePaths } from "../lib/paths.js";
@@ -11,13 +18,20 @@ async function main(): Promise<void> {
   log.info(`Waste collection fetch started${force ? " (forced)" : ""}`);
 
   const config = loadConfig();
-  if (!configuredServiceKey(config)) {
-    log.warn("No service key (waste region) configured — open the plugin admin, Settings, choose your region, save, then set Location. Skipping fetch.");
-    return;
-  }
-  if (!config.location?.f_id_strasse) {
-    log.warn("No location configured, skipping fetch");
-    return;
+  if (activeProvider(config) === "hausmuell") {
+    if (!isLocationComplete(config)) {
+      log.warn("No hausmuell.info address configured — open the plugin admin, Location tab, choose the portal and your address. Skipping fetch.");
+      return;
+    }
+  } else {
+    if (!configuredServiceKey(config)) {
+      log.warn("No service key (waste region) configured — open the plugin admin, Settings, choose your region, save, then set Location. Skipping fetch.");
+      return;
+    }
+    if (!config.location?.f_id_strasse) {
+      log.warn("No location configured, skipping fetch");
+      return;
+    }
   }
 
   if (!shouldFetch(config, force)) {

@@ -65,7 +65,16 @@ The repo ships **German** admin previews under `docs/wiki-assets/` (JPEG). They 
 
 ## Data source
 
-Single data path: public [`api.abfall.io`](https://api.abfall.io/). The **Data source** line in the UI is **informational**, not a selector. Schedules are fetched as **ICS** in the background and normalised — no manual ICS files. **No personal account** on api.abfall.io. Each provider has a **32-character hex service key** (same as on municipal “Abfuhrtermine” pages). **Location** tab: pick region or expert key → **Save region & settings**; then street search. Until a key is saved, street search and fetch are disabled. Finding the key: browser **Network** tab on ICS export, or community docs (e.g. Home Assistant [abfall.io source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io.md)).
+Two upstreams, chosen at the top of the **Location** tab (existing configs stay on api.abfall.io):
+
+1. **api.abfall.io** (default) — see below.
+2. **hausmuell.info** — ATURIS waste-calendar portals (`https://<subdomain>.hausmuell.info/`), see [hausmuell.info portals](#hausmuellinfo-portals).
+
+Both deliver ICS that runs through the same parser, category filter, cache, Loxone and MQTT output.
+
+### api.abfall.io
+
+Public [`api.abfall.io`](https://api.abfall.io/). Schedules are fetched as **ICS** in the background and normalised — no manual ICS files. **No personal account** on api.abfall.io. Each provider has a **32-character hex service key** (same as on municipal “Abfuhrtermine” pages). **Location** tab: pick region or expert key → **Save region & settings**; then street search. Until a key is saved, street search and fetch are disabled. Finding the key: browser **Network** tab on ICS export, or community docs (e.g. Home Assistant [abfall.io source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io.md)).
 
 ## Supported regions in the UI
 
@@ -74,7 +83,30 @@ Only schedules reachable via **api.abfall.io**. The **Location** tab lists suppo
 - **Source:** community list aligned with Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) / *AbfallIO* `SERVICE_MAP`; plugin can **refresh online** (`AbfallIO.py`).
 - **Bundled:** `data/abfallio-service-map.json` (in the ZIP).
 - **Override:** `<LBHOMEDIR>/data/plugins/<FOLDER>/abfallio-service-map.json` if present.
-- **Town missing?** Try expert **service key**; operators **not** on abfall.io are out of scope.
+- **Town missing?** Try expert **service key**, or check whether your operator uses a **hausmuell.info** portal (below).
+
+### hausmuell.info portals
+
+Pick the portal, then click through the address cascade. Which steps appear depends on the portal
+(**Ort → Ortsteil → Straße → Hausnummer**; the cascade stops as soon as the portal has identified the collection area).
+No account, no key. The plugin downloads the ICS export for the **current and the next year** (the next year usually
+appears in December), so there is no gap at the turn of the year. If a portal re-imports its data and the saved ids stop
+working, the address is re-resolved by its saved names automatically.
+
+| Subdomain | Operator |
+|---|---|
+| `azv` | Abfallwirtschaftszweckverband Wartburgkreis (AZV) |
+| `boerde` | Landkreis Börde AöR (KsB) |
+| `ew` | Eichsfeldwerke GmbH |
+| `ebkds` | Eigenbetrieb Kommunalwirtschaftliche Dienstleistungen Suhl |
+| `schmalkalden-meiningen` | Kreiswerke Schmalkalden-Meiningen GmbH |
+| `wesel` | ASG Wesel |
+
+All six were verified end-to-end (search → ICS → parsed dates) in November 2026. Not supported: `asc` (ASR Chemnitz,
+different proxy-based flow); Erfurt has moved off the platform. Portal list: `HAUSMUELL_PROVIDERS` in
+[`src-ts/lib/hausmuell-service.ts`](./src-ts/lib/hausmuell-service.ts) — the ATURIS frontends differ between portals
+(three generations), the module documents how each is handled. Same community knowledge as the Home Assistant
+[`hausmuell_info` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/hausmuell_info.md).
 
 ## Public help page and languages
 

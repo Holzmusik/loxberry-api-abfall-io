@@ -25,7 +25,31 @@ export interface MqttPublishStatus {
   broker?: string;
 }
 
+/** One chosen entry of the hausmuell.info address cascade. */
+export interface HausmuellPick {
+  id: string;
+  name: string;
+}
+
+/** Address on an ATURIS hausmuell.info portal (`https://<subdomain>.hausmuell.info/`). */
+export interface HausmuellConfig {
+  subdomain?: string;
+  ort?: HausmuellPick;
+  ortsteil?: HausmuellPick;
+  strasse?: HausmuellPick;
+  hnr?: HausmuellPick;
+  /** Entsorgungsgebiet id – the value that actually selects the calendar. */
+  egebiet?: string;
+  /** Cached `check_zusatz` result (front/back house); re-resolved when empty. */
+  zusatz_id?: string;
+}
+
+/** Which upstream delivers the schedule. Missing = `abfallio` (configs from before 1.6). */
+export type ProviderId = "abfallio" | "hausmuell";
+
 export interface PluginConfig {
+  provider?: ProviderId;
+  hausmuell?: HausmuellConfig;
   service_key?: string;
   /**
    * Optional https URL: JSON array of { title, url, service_id } or the upstream
@@ -104,6 +128,8 @@ export interface ApiStatus {
   };
   /** False until the user has saved a 32-hex abfall.io service key in Settings. */
   service_key_configured?: boolean;
+  /** Active upstream (`abfallio` default). */
+  provider?: ProviderId;
 }
 
 export interface SearchItem {

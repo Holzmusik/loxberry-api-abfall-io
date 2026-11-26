@@ -3,8 +3,23 @@ import { log } from "./logger.js";
 import { publishWasteData } from "./mqtt-publisher.js";
 import { readMergedCronInstallProbe, resolvePaths } from "./paths.js";
 import { foldForSearch } from "./fold-for-search.js";
+import {
+  fetchHausmuellIcs,
+  hausmuellLocationLabel,
+  isHausmuellAddressComplete,
+  isValidSubdomain,
+  providerTitle,
+} from "./hausmuell-service.js";
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
-import type { ApiStatus, MqttPublishStatus, PluginConfig, SearchItem, WasteData, WasteEntry } from "./types.js";
+import type {
+  ApiStatus,
+  MqttPublishStatus,
+  PluginConfig,
+  ProviderId,
+  SearchItem,
+  WasteData,
+  WasteEntry,
+} from "./types.js";
 
 const DEFAULT_FETCH_INTERVAL_HOURS = 6;
 const DEFAULT_FETCH_FUZZ_MINUTES = 30;
@@ -194,6 +209,24 @@ export interface ParseIcsOptions {
   language?: string;
 }
 
+/**
+ * ICS DTSTART value → local calendar day. Accepts `YYYYMMDD` (all-day, abfall.io) and
+ * `YYYYMMDDTHHMMSS[Z]` (timed events, e.g. hausmuell.info: `20261202T050000Z`).
+ * UTC times are converted to the local day first.
+ */
+export function parseIcsDate(dateStr: string): Date | null {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(dateStr);
+  if (!m) {
+    return null;
+  }
+  const [, y, mo, d, hh, mi, ss, z] = m;
+  if (hh !== undefined && z) {
+    const utc = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mi), Number(ss ?? 0)));
+    return new Date(utc.getFullYear(), utc.getMonth(), utc.getDate());
+  }
+  return new Date(Number(y), Number(mo) - 1, Number(d));
+}
+
 export function parseIcs(icsText: string, options?: ParseIcsOptions): Record<string, WasteEntry> {
   const lang = options?.language;
   const now = new Date();
@@ -207,14 +240,7 @@ export function parseIcs(icsText: string, options?: ParseIcsOptions): Record<str
       currentSummary = line.slice(8).trim();
     } else if (line.startsWith("DTSTART")) {
       const dateStr = line.split(":").at(-1)?.trim() ?? "";
-      if (/^\d{8}$/.test(dateStr)) {
-        const year = Number(dateStr.slice(0, 4));
-        const month = Number(dateStr.slice(4, 6)) - 1;
-        const day = Number(dateStr.slice(6, 8));
-        currentDate = new Date(year, month, day);
-      } else {
-        currentDate = null;
-      }
+      currentDate = parseIcsDate(dateStr);
     } else if (line === "END:VEVENT") {
       if (currentSummary && currentDate) {
         const currentDateDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
@@ -274,7 +300,43 @@ export function inferKommuneFromStreetId(streetId: string): string {
   return match ? match[1] : "";
 }
 
+/** Active upstream; configs written before the provider switch existed are abfall.io. */
+export function activeProvider(cfg: PluginConfig): ProviderId {
+  return cfg.provider === "hausmuell" ? "hausmuell" : "abfallio";
+}
+
+/** True once the chosen upstream has everything it needs to download a calendar. */
+export function isLocationComplete(cfg: PluginConfig): boolean {
+  if (activeProvider(cfg) === "hausmuell") {
+    return isHausmuellAddressComplete(cfg.hausmuell);
+  }
+  return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
+}
+
 export async function fetchData(config = loadConfig()): Promise<WasteData> {
+  if (activeProvider(config) === "hausmuell") {
+    return fetchHausmuellData(config);
+  }
+  return fetchAbfallioData(config);
+}
+
+async function fetchHausmuellData(config: PluginConfig): Promise<WasteData> {
+  const hm = config.hausmuell ?? {};
+  if (!isHausmuellAddressComplete(hm)) {
+    throw new Error(
+      "No hausmuell.info address configured. On the Location tab, choose the portal and select your address.",
+    );
+  }
+  log.info(`Fetching ICS data from ${hm.subdomain}.hausmuell.info: egebiet=${hm.egebiet}`);
+  const { ics, config: resolved } = await fetchHausmuellIcs(hm);
+  if (resolved.egebiet !== hm.egebiet || resolved.zusatz_id !== hm.zusatz_id || resolved.strasse?.id !== hm.strasse?.id) {
+    log.info(`hausmuell.info ids changed (egebiet ${hm.egebiet} -> ${resolved.egebiet}); saving updated address`);
+    saveConfig({ ...loadConfig(), hausmuell: resolved });
+  }
+  return finalizeAndCache(config, ics, hausmuellLocationLabel(resolved));
+}
+
+async function fetchAbfallioData(config: PluginConfig): Promise<WasteData> {
   const loc = config.location ?? {};
   const key = configuredServiceKey(config);
   if (!key) {
@@ -326,6 +388,13 @@ export async function fetchData(config = loadConfig()): Promise<WasteData> {
     throw new Error(`Response is not ICS data: ${text.slice(0, 200)}`);
   }
 
+  const streetName = loc.street_name ?? `Street ${fIdStrasse}`;
+  const hnrName = loc.hnr_name ?? "";
+  return finalizeAndCache(config, text, `${streetName} ${hnrName}`.trim());
+}
+
+/** Shared tail for every upstream: parse ICS, apply filter, write cache, publish MQTT. */
+async function finalizeAndCache(config: PluginConfig, text: string, location: string): Promise<WasteData> {
   const rawTermine = parseIcs(text, { language: config.language });
   const termine = pickFilteredTermine(rawTermine, config.categories_filter);
   if (Object.keys(termine).length === 0 && Object.keys(rawTermine).length > 0) {
@@ -333,9 +402,6 @@ export async function fetchData(config = loadConfig()): Promise<WasteData> {
       `Category filter excluded all ${Object.keys(rawTermine).length} ICS categories; cache will be empty until the filter matches names in the feed.`,
     );
   }
-  const streetName = loc.street_name ?? `Street ${fIdStrasse}`;
-  const hnrName = loc.hnr_name ?? "";
-  const location = `${streetName} ${hnrName}`.trim();
   const intervalHours = normalizedFetchIntervalHours(config.fetch_interval_hours);
   const fuzzMinutes = Math.max(0, config.fetch_fuzz_minutes ?? DEFAULT_FETCH_FUZZ_MINUTES);
   const offsetMinutes = fuzzMinutes === 0 ? 0 : Math.round((Math.random() * 2 - 1) * fuzzMinutes);
@@ -386,22 +452,33 @@ export function getStatus(): ApiStatus {
   const mqttStatus: MqttPublishStatus = cached.mqtt ?? { ok: false, last: "" };
 
   const sm = getServiceMapSourceInfo();
+  const provider = activeProvider(cfg);
   const key = configuredServiceKey(cfg);
-  const has_region = key.length > 0;
-  const map = loadServiceMap();
-  const region_title = has_region
-    ? titleForServiceKey(key, map) ?? `${key.slice(0, 8)}…`
-    : "";
-  const strasse = String(loc.f_id_strasse ?? "").trim();
-  const has_street = strasse !== "";
+  let has_region: boolean;
+  let region_title: string;
+  let has_street: boolean;
+  let location: string;
+  if (provider === "hausmuell") {
+    const hm = cfg.hausmuell ?? {};
+    has_region = isValidSubdomain(hm.subdomain);
+    region_title = has_region ? providerTitle(hm.subdomain) : "";
+    has_street = isHausmuellAddressComplete(hm);
+    location = hausmuellLocationLabel(hm);
+  } else {
+    has_region = key.length > 0;
+    const map = loadServiceMap();
+    region_title = has_region ? titleForServiceKey(key, map) ?? `${key.slice(0, 8)}…` : "";
+    has_street = String(loc.f_id_strasse ?? "").trim() !== "";
+    location = `${loc.street_name ?? ""} ${loc.hnr_name ?? ""}`.trim();
+  }
   return {
     cookie_status: "not_needed",
     cookie_created: "",
     cookie_expires: "",
-    client_id: "(api.abfall.io - no registration)",
+    client_id: provider === "hausmuell" ? "(hausmuell.info - no registration)" : "(api.abfall.io - no registration)",
     last_fetch: cached.timestamp ?? "",
     next_fetch_due: cached.next_fetch_due ?? "",
-    location: `${loc.street_name ?? ""} ${loc.hnr_name ?? ""}`.trim(),
+    location,
     has_region,
     region_title,
     has_street,
@@ -409,11 +486,12 @@ export function getStatus(): ApiStatus {
     termine_count: Object.keys(cached.termine ?? {}).length,
     cached_data: cachedData,
     /** Single upstream; value is for display. Schedules are fetched as an ICS calendar in the background. */
-    api_mode: "api.abfall.io",
+    api_mode: provider === "hausmuell" ? "hausmuell.info" : "api.abfall.io",
     mqtt: mqttStatus,
     install_cron: readMergedCronInstallProbe(),
     service_map: { source: sm.source, count: sm.count },
     service_key_configured: configuredServiceKey(cfg) !== "",
+    provider,
   };
 }
 
@@ -434,7 +512,7 @@ export function shouldFetch(config: PluginConfig, force: boolean, now: Date = ne
   if (force) {
     return true;
   }
-  if (!configuredServiceKey(config) || !config.location?.f_id_strasse) {
+  if (!isLocationComplete(config)) {
     return false;
   }
   const { cacheFile } = getPaths();

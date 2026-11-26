@@ -33,6 +33,23 @@ if ($lbhomedir && is_dir($lbhomedir . '/bin/plugins/' . $lbplugindir)) {
 $config_file = $plugin_config_dir . '/abfall.json';
 $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
 $location = $config['location'] ?? [];
+/* Upstream: api.abfall.io (default, also for configs from before the switch existed) or hausmuell.info */
+$provider = (($config['provider'] ?? '') === 'hausmuell') ? 'hausmuell' : 'abfallio';
+$hmConfig = is_array($config['hausmuell'] ?? null) ? $config['hausmuell'] : [];
+$hmLocationParts = [];
+$hmPlace = trim((string) (($hmConfig['ort'] ?? [])['name'] ?? ''));
+$hmOrtsteil = trim((string) (($hmConfig['ortsteil'] ?? [])['name'] ?? ''));
+if ($hmOrtsteil !== '' && !preg_match('/^-.*-$/', $hmOrtsteil)) {
+    $hmPlace .= ($hmPlace !== '' ? ' / ' : '') . $hmOrtsteil;
+}
+if ($hmPlace !== '') {
+    $hmLocationParts[] = $hmPlace;
+}
+$hmStreet = trim(((string) (($hmConfig['strasse'] ?? [])['name'] ?? '')) . ' ' . ((string) (($hmConfig['hnr'] ?? [])['name'] ?? '')));
+if ($hmStreet !== '') {
+    $hmLocationParts[] = $hmStreet;
+}
+$hmLocationLabel = implode(', ', $hmLocationParts);
 
 AbfallioI18N::bootstrap($plugin_lang_dir, (string) ($config['language'] ?? ''));
 $activeLang = AbfallioI18N::lang();
@@ -362,6 +379,63 @@ if (!$use_loxberry_frame) {
 
     <!-- LOCATION TAB: Entsorgungsregion zuerst, dann Straße -->
     <div class="tab-content<?= $tab === 'location' ? ' active' : '' ?>" id="tab-location">
+        <div class="form-group abfallio-provider-switch" data-testid="abfallio-provider-switch" style="margin-bottom:1.25rem; padding:0.75rem 1rem; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa;">
+            <label style="margin-bottom:0.4rem;"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'LABEL_PROVIDER')) ?></label>
+            <label style="display:flex; gap:0.5rem; align-items:flex-start; font-weight:normal; margin:0.2rem 0;">
+                <input type="radio" name="abfallio-provider" value="abfallio" <?= $provider === 'abfallio' ? 'checked' : '' ?> onchange="abfallioSetProvider(this.value)" style="width:auto; margin-top:0.3em;">
+                <span><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PROVIDER_ABFALLIO')) ?></span>
+            </label>
+            <label style="display:flex; gap:0.5rem; align-items:flex-start; font-weight:normal; margin:0.2rem 0;">
+                <input type="radio" name="abfallio-provider" value="hausmuell" <?= $provider === 'hausmuell' ? 'checked' : '' ?> onchange="abfallioSetProvider(this.value)" style="width:auto; margin-top:0.3em;">
+                <span><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PROVIDER_HAUSMUELL')) ?></span>
+            </label>
+            <small><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'HELP_PROVIDER')) ?></small>
+        </div>
+
+        <!-- hausmuell.info (ATURIS): Portal, dann Ort → Ortsteil → Straße → Hausnummer (je nach Portal) -->
+        <div id="abfallio-provider-hausmuell" data-testid="abfallio-provider-hausmuell" style="<?= $provider === 'hausmuell' ? '' : 'display:none;' ?>">
+            <h3 class="section-title" style="margin-top:0; padding-top:0; border-top:none;"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'SECTION_PORTAL')) ?></h3>
+            <div class="form-group">
+                <label for="hm-portal"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'LABEL_PORTAL')) ?></label>
+                <select id="hm-portal" data-saved="<?= htmlspecialchars((string) ($hmConfig['subdomain'] ?? '')) ?>">
+                    <option value=""><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PLACEHOLDER_PORTAL')) ?></option>
+                </select>
+                <small><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'HELP_PORTAL')) ?></small>
+            </div>
+
+            <h3 class="section-title"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'SECTION_ADDRESS')) ?></h3>
+            <?php if ($hmLocationLabel !== ''): ?>
+            <div class="selected-location" id="hm-current">
+                <strong><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'CURRENT_LOCATION')) ?></strong>
+                <?= htmlspecialchars($hmLocationLabel) ?>
+            </div>
+            <?php endif; ?>
+
+            <div id="hm-trail" class="alert alert-info" style="display:none;"></div>
+            <div class="form-group" id="hm-level-group" style="display:none;">
+                <label for="hm-filter" id="hm-level-label"></label>
+                <input type="text" id="hm-filter" placeholder="<?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PLACEHOLDER_FILTER')) ?>" autocomplete="off">
+                <div class="search-results" id="hm-results" style="display:block; max-height:320px; overflow-y:auto;"></div>
+            </div>
+            <div id="hm-msg" style="display:none; margin-bottom:0.75rem;"></div>
+
+            <div id="hm-selection" data-testid="abfallio-hm-selection" style="display:none;">
+                <button class="btn btn-primary" id="btn-hm-save" onclick="hmSave()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_SAVE')) ?></button>
+            </div>
+
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <button type="button" class="btn btn-secondary" id="btn-hm-restart" onclick="hmRestart()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_RESTART')) ?></button>
+                <button type="button" class="btn btn-secondary" id="btn-hm-reset" onclick="hmReset()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_RESET')) ?></button>
+            </div>
+
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <strong><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'INFO_TITLE')) ?></strong>
+                <?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'INFO_TEXT')) ?>
+            </div>
+        </div>
+
+        <!-- api.abfall.io: Entsorgungsregion zuerst, dann Straße -->
+        <div id="abfallio-provider-abfallio" data-testid="abfallio-provider-abfallio" style="<?= $provider === 'abfallio' ? '' : 'display:none;' ?>">
         <p class="abfallio-location-order-hint" style="font-size:0.9em; color:#444; line-height:1.5; margin:0 0 1rem;"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'HINT_REGION_THEN_STREET')) ?></p>
 
         <h3 class="section-title" style="margin-top:0; padding-top:0; border-top:none;"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'SECTION_API_REGION')) ?></h3>
@@ -482,6 +556,7 @@ if (!$use_loxberry_frame) {
             <strong><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'INFO_DATA_SOURCE_TITLE')) ?></strong>
             <?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'INFO_DATA_SOURCE_TEXT')) ?>
         </div>
+        </div><!-- /#abfallio-provider-abfallio -->
     </div>
 
     <!-- SETTINGS TAB -->
@@ -1010,6 +1085,194 @@ function saveLocation() {
             showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error');
         });
 }
+
+/* ---- Data source switch + hausmuell.info address cascade ---- */
+var hmState = null;
+var hmLevel = null;
+var hmItems = [];
+var hmPortalsLoaded = false;
+
+function abfallioSetProvider(value) {
+    var hm = document.getElementById('abfallio-provider-hausmuell');
+    var ab = document.getElementById('abfallio-provider-abfallio');
+    if (hm) hm.style.display = value === 'hausmuell' ? '' : 'none';
+    if (ab) ab.style.display = value === 'hausmuell' ? 'none' : '';
+    abfallioPostForm({ action: 'set_provider', provider: value })
+        .then(function(resp) {
+            if (resp && resp.success) {
+                showAlert('tab-location', tt('HAUSMUELL', 'MSG_PROVIDER_SAVED'), 'success');
+            } else {
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
+            }
+        })
+        .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
+    if (value === 'hausmuell') hmInit();
+}
+
+function hmFold(s) {
+    return String(s || '').toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function hmShowMsg(text, color) {
+    var el = document.getElementById('hm-msg');
+    if (!el) return;
+    if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = 'block';
+    el.style.color = color || '#999';
+    el.textContent = text;
+}
+
+function hmInit() {
+    var sel = document.getElementById('hm-portal');
+    if (!sel || hmPortalsLoaded) return;
+    hmPortalsLoaded = true;
+    sel.addEventListener('change', function() { hmRestart(); });
+    document.getElementById('hm-filter').addEventListener('input', hmRenderList);
+    abfallioGetJson({ action: 'hm_providers' })
+        .then(function(list) {
+            if (!Array.isArray(list)) return;
+            var saved = sel.getAttribute('data-saved') || '';
+            list.forEach(function(p) {
+                var o = document.createElement('option');
+                o.value = p.subdomain;
+                o.textContent = p.title + ' (' + p.subdomain + '.hausmuell.info)';
+                if (p.subdomain === saved) o.selected = true;
+                sel.appendChild(o);
+            });
+            hmRestart();
+        })
+        .catch(function() { hmShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED'), '#c62828'); });
+}
+
+function hmRestart() {
+    var sub = document.getElementById('hm-portal').value;
+    hmState = sub ? { subdomain: sub } : null;
+    hmLevel = null;
+    hmItems = [];
+    document.getElementById('hm-selection').style.display = 'none';
+    document.getElementById('hm-level-group').style.display = 'none';
+    hmRenderTrail();
+    if (!hmState) {
+        hmShowMsg(tt('HAUSMUELL', 'MSG_PICK_PORTAL'));
+        return;
+    }
+    hmStep();
+}
+
+function hmRenderTrail() {
+    var el = document.getElementById('hm-trail');
+    var parts = [];
+    if (hmState) {
+        ['ort', 'ortsteil', 'strasse', 'hnr'].forEach(function(k) {
+            if (hmState[k] && hmState[k].name) parts.push(hmState[k].name);
+        });
+    }
+    if (parts.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = '';
+    var b = document.createElement('strong');
+    b.textContent = tt('HAUSMUELL', 'SELECTED') + ' ';
+    el.appendChild(b);
+    el.appendChild(document.createTextNode(parts.join(' › ')));
+}
+
+function hmStep() {
+    var group = document.getElementById('hm-level-group');
+    group.style.display = 'none';
+    hmShowMsg(tt('HAUSMUELL', 'MSG_LOADING'));
+    abfallioPostForm({ action: 'hm_step', state: JSON.stringify(hmState) })
+        .then(function(resp) {
+            if (!resp || resp.error) {
+                hmShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED') + (resp && resp.error ? ': ' + resp.error : ''), '#c62828');
+                return;
+            }
+            if (resp.done) {
+                if (resp.complete) {
+                    hmShowMsg('');
+                    document.getElementById('hm-selection').style.display = 'block';
+                } else {
+                    hmShowMsg(tt('HAUSMUELL', 'MSG_INCOMPLETE'), '#b71c1c');
+                }
+                return;
+            }
+            hmShowMsg('');
+            hmLevel = resp.level;
+            hmItems = Array.isArray(resp.items) ? resp.items : [];
+            document.getElementById('hm-level-label').textContent = tt('HAUSMUELL', 'LEVEL_' + String(resp.level).toUpperCase());
+            var f = document.getElementById('hm-filter');
+            f.value = '';
+            group.style.display = 'block';
+            hmRenderList();
+            f.focus();
+        })
+        .catch(function() { hmShowMsg(tt('STATUS', 'MSG_CONNECTION_ERROR'), '#c62828'); });
+}
+
+function hmRenderList() {
+    var el = document.getElementById('hm-results');
+    var q = hmFold(document.getElementById('hm-filter').value.trim());
+    var shown = hmItems.filter(function(it) { return q === '' || hmFold(it.name).indexOf(q) !== -1; });
+    el.innerHTML = '';
+    if (shown.length === 0) {
+        el.innerHTML = '<div class="search-result-msg" style="color:#999;">' + tt('HAUSMUELL', 'MSG_NO_RESULTS') + '</div>';
+        return;
+    }
+    shown.forEach(function(it) {
+        var div = document.createElement('div');
+        div.className = 'search-result';
+        div.textContent = it.name;
+        div.onclick = function() { hmPick(it); };
+        el.appendChild(div);
+    });
+}
+
+function hmPick(item) {
+    if (!hmState || !hmLevel) return;
+    hmState[hmLevel] = { id: String(item.id), name: item.name };
+    if (item.egebiet) hmState.egebiet = String(item.egebiet);
+    if (hmLevel === 'ort' && typeof item.has_ortsteile === 'boolean') hmState.ort_has_ortsteile = item.has_ortsteile;
+    hmRenderTrail();
+    hmStep();
+}
+
+function hmSave() {
+    if (!hmState) return;
+    abfallioPostForm({ action: 'hm_save', state: JSON.stringify(hmState) })
+        .then(function(resp) {
+            if (resp && resp.success) {
+                showAlert('tab-location', tt('HAUSMUELL', 'MSG_SAVED'), 'success');
+                setTimeout(function() {
+                    var u = new URL(window.location.href);
+                    u.searchParams.set('tab', 'status');
+                    u.searchParams.set('dofetch', '1');
+                    window.location.href = u.toString();
+                }, 800);
+            } else {
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
+            }
+        })
+        .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
+}
+
+function hmReset() {
+    if (!confirm(tt('HAUSMUELL', 'CONFIRM_RESET'))) return;
+    abfallioPostForm({ action: 'hm_reset' })
+        .then(function(resp) {
+            if (resp && resp.success) {
+                window.location.reload();
+            } else {
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
+            }
+        })
+        .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
+}
+
+(function hmAutoInit() {
+    var pc = document.querySelector('.plugin-container');
+    var at = (pc && pc.getAttribute('data-active-tab')) || 'status';
+    var r = document.querySelector('input[name="abfallio-provider"]:checked');
+    if (at === 'location' && r && r.value === 'hausmuell') hmInit();
+})();
 
 function refreshServiceMapList() {
     var btn = document.getElementById('btn-refresh-service-map');
