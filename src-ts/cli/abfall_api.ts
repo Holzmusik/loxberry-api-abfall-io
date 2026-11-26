@@ -282,8 +282,11 @@ async function main(): Promise<void> {
       printJson({ success: false, error: "Unknown provider" });
       process.exit(1);
     }
-    saveConfig({ ...loadConfig(), provider: provider as ProviderId });
-    printJson({ success: true });
+    const prev = loadConfig();
+    const changed = (prev.provider ?? "abfallio") !== provider;
+    // Category names differ per operator: a filter from the previous source would hide most categories.
+    saveConfig({ ...prev, provider: provider as ProviderId, ...(changed ? { categories_filter: [] } : {}) });
+    printJson({ success: true, filter_cleared: changed && (prev.categories_filter?.length ?? 0) > 0 });
     return;
   }
 
