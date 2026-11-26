@@ -123,7 +123,7 @@ Configurations saved with the original street search keep working unchanged.
 
 **Supported regions:** the **Location** tab lists them in the collapsible *“Which regions work?”* block (names from the bundled autocomplete data).
 
-- **Source:** community lists from Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) — *AbfallIO* (legacy) and *AbfallIOGraphQL* (v3) `SERVICE_MAP`, merged; plugin can **refresh online**. Status November 2026: 53 entries, 24 on the legacy API, 13 on v3, 16 keys rejected by abfall.io (operator migrated, new key unknown).
+- **Source:** community lists from Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) — *AbfallIO* (legacy) and *AbfallIOGraphQL* (v3) `SERVICE_MAP`, merged; plugin can **refresh online**. Status November 2026: 53 entries — 24 on the legacy API (597 municipalities), 11 usable on v3 (378 places), 2 v3 operators that only allow requests from their own website (KELL, Böblingen), 16 keys rejected by abfall.io (operator migrated, new key unknown).
 - **Bundled:** `data/abfallio-service-map.json` (in the ZIP).
 - **Override:** `<LBHOMEDIR>/data/plugins/<FOLDER>/abfallio-service-map.json` if present.
 - **Town missing?** Try expert **service key**, or check the [other data sources](#which-data-source-do-i-need).
