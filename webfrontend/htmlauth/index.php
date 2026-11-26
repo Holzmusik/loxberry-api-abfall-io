@@ -240,7 +240,9 @@ $waste_plugin_css .= <<<'WASTE_CSS'
         .abfallio-lb-embed .tab-content li,
         .abfallio-lb-embed .tab-content td { text-shadow: none !important; }
         .abfallio-lb-embed .tab-content { color: #333 !important; }
-        .abfallio-lb-embed .form-group > label { color: #555 !important; }
+        .abfallio-lb-embed .form-group > label,
+        #tab-location .form-group > label,
+        #tab-settings .form-group > label { color: #555 !important; text-shadow: none !important; }
         .abfallio-lb-embed .category-filter-checkboxes label,
         .abfallio-lb-embed .category-filter-checkboxes span,
         .abfallio-lb-embed .abfallio-provider-switch label span { color: #333 !important; }
@@ -1146,6 +1148,13 @@ function hmShowMsg(text, color) {
     el.textContent = text;
 }
 
+/** LoxBerry (jQuery Mobile) replaces <select> by a styled button that must be refreshed after JS changes. */
+function hmRefreshSelect(sel) {
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.selectmenu) {
+        try { window.jQuery(sel).selectmenu('refresh', true); } catch (e) { /* not enhanced (standalone page) */ }
+    }
+}
+
 function hmInit() {
     var sel = document.getElementById('hm-portal');
     if (!sel || hmPortalsLoaded) return;
@@ -1163,6 +1172,12 @@ function hmInit() {
                 if (p.subdomain === saved) o.selected = true;
                 sel.appendChild(o);
             });
+            hmRefreshSelect(sel);
+            // With a saved address, show it and wait for "Start selection over" / a portal change.
+            if (document.getElementById('hm-current') && sel.value === saved && saved !== '') {
+                hmShowMsg('');
+                return;
+            }
             hmRestart();
         })
         .catch(function() { hmShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED'), '#c62828'); });
