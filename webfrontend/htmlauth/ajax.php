@@ -158,6 +158,27 @@ switch ($action) {
         echo $output ?: json_encode([]);
         break;
 
+    /* ---- api.abfall.io click-through address (legacy form API with Gemeinde/Ortsteil, or v3 GraphQL) ---- */
+
+    case 'aio_step':
+        $state = (string) ($_POST['state'] ?? $_GET['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['error' => 'Missing or invalid state']);
+        }
+        $output = run_api($node, $api_script, ['aio_step', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['error' => 'No response from aio_step']);
+        break;
+
+    case 'aio_save':
+        $state = (string) ($_POST['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['success' => false, 'error' => 'Missing or invalid state']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['aio_save', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from aio_save']);
+        break;
+
     /* ---- hausmuell.info (ATURIS) upstream ---- */
 
     case 'hm_providers':

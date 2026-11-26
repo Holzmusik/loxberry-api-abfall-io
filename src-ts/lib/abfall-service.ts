@@ -18,9 +18,11 @@ import {
 } from "./muellabfuhr-service.js";
 import { awidoLocationLabel, customerTitle, fetchAwido, isAwidoAddressComplete, isValidCustomer } from "./awido-service.js";
 import { fetchOffizium, findInstance, isOffiziumAddressComplete, offiziumLocationLabel } from "./offizium-service.js";
+import { cascadeLabel, isCascadeComplete, legacyFetchIcs, v3FetchIcs } from "./abfallio-cascade.js";
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
 import type {
   ApiStatus,
+  LocationConfig,
   MqttPublishStatus,
   PluginConfig,
   ProviderId,
@@ -334,8 +336,15 @@ export function isLocationComplete(cfg: PluginConfig): boolean {
     case "offizium":
       return isOffiziumAddressComplete(cfg.offizium);
     default:
-      return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
+      return configuredServiceKey(cfg) !== "" && isAbfallioAddressSaved(cfg.location);
   }
+}
+
+/** abfall.io address: stepped/v3 selection (since 1.6) or the original street-first one. */
+function isAbfallioAddressSaved(loc: LocationConfig | undefined): boolean {
+  if (!loc) return false;
+  if (loc.api) return isCascadeComplete(loc);
+  return !!loc.f_id_strasse;
 }
 
 export async function fetchData(config = loadConfig()): Promise<WasteData> {
@@ -411,6 +420,14 @@ async function fetchAbfallioData(config: PluginConfig): Promise<WasteData> {
     throw new Error(
       "No service key configured. In the admin UI, open Settings, choose your waste region (or enter the 32-character key), save, then set your address on the Location tab.",
     );
+  }
+  if (loc.api) {
+    if (!isCascadeComplete(loc)) {
+      throw new Error("No address configured. Please select your address on the Location tab.");
+    }
+    log.info(`Fetching abfall.io (${loc.api} API): ${cascadeLabel(loc)}`);
+    const ics = loc.api === "v3" ? await v3FetchIcs(key, loc.house_id ?? "") : await legacyFetchIcs(key, loc);
+    return finalizeAndCache(config, ics, cascadeLabel(loc));
   }
   let fIdKommune = loc.f_id_kommune ?? "";
   const fIdStrasse = loc.f_id_strasse ?? "";
@@ -555,8 +572,8 @@ export function getStatus(): ApiStatus {
     has_region = key.length > 0;
     const map = loadServiceMap();
     region_title = has_region ? titleForServiceKey(key, map) ?? `${key.slice(0, 8)}…` : "";
-    has_street = String(loc.f_id_strasse ?? "").trim() !== "";
-    location = `${loc.street_name ?? ""} ${loc.hnr_name ?? ""}`.trim();
+    has_street = isAbfallioAddressSaved(loc);
+    location = loc.api ? cascadeLabel(loc) : `${loc.street_name ?? ""} ${loc.hnr_name ?? ""}`.trim();
   }
   return {
     cookie_status: "not_needed",

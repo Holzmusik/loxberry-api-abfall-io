@@ -712,29 +712,26 @@ if (!$use_loxberry_frame) {
 
         <h3 class="section-title"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'SECTION_STREET')) ?></h3>
         <?php if (!empty($location['street_name'])): ?>
-        <div class="selected-location">
+        <div class="selected-location" id="aio-current">
             <strong><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'CURRENT_LOCATION')) ?></strong>
             <?= htmlspecialchars(trim($location['street_name'] . ' ' . ($location['hnr_name'] ?? ''))) ?>
         </div>
         <?php endif; ?>
 
-        <div class="form-group">
-            <label><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'LABEL_SEARCH')) ?></label>
-            <input type="text" id="street-search" placeholder="<?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'PLACEHOLDER_SEARCH')) ?>" autocomplete="off">
-            <div class="search-results" id="street-results" style="display:none;"></div>
+        <!-- Click-through address: Gemeinde → (Ortsteil) → Straße → Hausnummer, legacy form API or abfall.io v3 -->
+        <div id="aio-trail" class="alert alert-info" style="display:none;"></div>
+        <div class="form-group" id="aio-level-group" style="display:none;">
+            <label for="aio-filter" id="aio-level-label"></label>
+            <input type="text" id="aio-filter" placeholder="<?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PLACEHOLDER_FILTER')) ?>" autocomplete="off">
+            <div class="search-results" id="aio-results" style="display:block; max-height:320px; overflow-y:auto;"></div>
         </div>
-
-        <div class="form-group" id="hnr-group" style="display:none;">
-            <label><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'LABEL_HNR')) ?></label>
-            <div class="search-results" id="hnr-results"></div>
+        <div id="aio-msg" style="display:none; margin-bottom:0.75rem;"></div>
+        <div class="form-group" id="aio-start-group">
+            <button type="button" class="btn btn-secondary" id="btn-aio-start" onclick="aioRestart()"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_SELECT_ADDRESS')) ?></button>
         </div>
 
         <div id="location-selection" class="abfallio-location-selection" style="display:none;" data-testid="abfallio-location-selection">
-            <div class="alert alert-info">
-                <strong><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'SELECTED')) ?></strong>
-                <span id="selected-street"></span> <span id="selected-hnr"></span>
-            </div>
-            <button class="btn btn-primary" onclick="saveLocation()"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_SAVE')) ?></button>
+            <button class="btn btn-primary" id="btn-aio-save" onclick="aioSave()"><?= htmlspecialchars(AbfallioI18N::t('LOCATION', 'BTN_SAVE')) ?></button>
         </div>
 
         <div class="form-group" style="margin-top: 0.75rem;">
@@ -906,8 +903,6 @@ if (!$use_loxberry_frame) {
 
 <script>
 var ajaxUrl = 'ajax.php';
-var selectedStreet = null;
-var selectedHnr = null;
 /** Last termine object from status (for category UI refresh). */
 var abfallioLastTermine = {};
 var L = <?= $dictJson ?>;
@@ -1154,114 +1149,121 @@ function selectServiceRegion(item) {
     if (el) el.style.display = 'none';
 }
 
-var searchTimer = null;
-document.getElementById('street-search').addEventListener('input', function() {
-    var q = this.value.trim();
-    clearTimeout(searchTimer);
-    if (q.length < 3) {
-        document.getElementById('street-results').style.display = 'none';
-        return;
-    }
-    searchTimer = setTimeout(function() { searchStreet(q); }, 400);
-});
+/* ---- api.abfall.io click-through address (Gemeinde → Ortsteil → Straße → Hausnummer; legacy or v3 API) ---- */
+var aioState = null;
+var aioLevel = null;
+var aioItems = [];
 
-function searchStreet(q) {
-    abfallioGetJson({ action: 'search_street', q: q })
-        .then(function(data) {
-            var el = document.getElementById('street-results');
-            if (data && data.error === 'service_key_required') {
-                el.innerHTML = '<div class="search-result-msg" style="color:#b71c1c;">' + tt('LOCATION', 'MSG_SERVICE_KEY_REQUIRED') + '</div>';
-                el.style.display = 'block';
-                return;
-            }
-            if (!data || data.error || !Array.isArray(data) || data.length === 0) {
-                el.innerHTML = '<div class="search-result-msg" style="color:#999;">' + tt('LOCATION', 'MSG_NO_RESULTS') + '</div>';
-                el.style.display = 'block';
-                return;
-            }
-            el.innerHTML = '';
-            data.forEach(function(item) {
-                var div = document.createElement('div');
-                div.className = 'search-result';
-                div.textContent = item.name;
-                div.onclick = function() { selectStreet(item); };
-                el.appendChild(div);
-            });
-            el.style.display = 'block';
-        })
-        .catch(function() {
-            var el = document.getElementById('street-results');
-            el.innerHTML = '<div class="search-result-msg" style="color:#c62828;">' + tt('LOCATION', 'MSG_SEARCH_FAILED') + '</div>';
-            el.style.display = 'block';
-        });
+function aioShowMsg(text, color) {
+    var el = document.getElementById('aio-msg');
+    if (!el) return;
+    if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = 'block';
+    el.style.color = color || '#999';
+    el.textContent = text;
 }
 
-function selectStreet(item) {
-    selectedStreet = item;
-    selectedHnr = null;
-    document.getElementById('street-results').style.display = 'none';
-    document.getElementById('street-search').value = item.name;
-    document.getElementById('selected-street').textContent = item.name;
-    document.getElementById('selected-hnr').textContent = '';
+function aioRestart() {
+    aioState = {};
+    aioLevel = null;
+    aioItems = [];
     document.getElementById('location-selection').style.display = 'none';
+    document.getElementById('aio-start-group').style.display = 'none';
+    aioRenderTrail();
+    aioStep();
+}
 
-    document.getElementById('hnr-group').style.display = 'block';
-    document.getElementById('hnr-results').innerHTML =
-        '<div class="search-result-msg" style="color:#999;">' + tt('LOCATION','HNR_LOADING') + '</div>';
-
-    abfallioGetJson({ action: 'search_hnr', street_id: item.id })
-        .then(function(data) {
-            var el = document.getElementById('hnr-results');
-            if (data && data.error === 'service_key_required') {
-                el.innerHTML = '<div class="search-result-msg" style="color:#b71c1c;">' + tt('LOCATION', 'MSG_SERVICE_KEY_REQUIRED') + '</div>';
-                return;
-            }
-            if (!data || data.error || !Array.isArray(data) || data.length === 0) {
-                el.innerHTML = '<div class="search-result-msg" style="color:#999;">' + tt('LOCATION', 'HNR_NONE_FOUND') + '</div>';
-                return;
-            }
-            if (data[0] && data[0].id === '__not_needed__') {
-                selectedHnr = { id: '', name: '' };
-                el.innerHTML = '<div class="search-result selected">' + tt('LOCATION', 'HNR_NOT_REQUIRED') + '</div>';
-                document.getElementById('selected-hnr').textContent = '';
-                document.getElementById('location-selection').style.display = 'block';
-                return;
-            }
-            el.innerHTML = '';
-            data.forEach(function(h) {
-                var div = document.createElement('div');
-                div.className = 'search-result';
-                div.textContent = h.name;
-                div.onclick = function(ev) { selectHnr(h, ev); };
-                el.appendChild(div);
-            });
+function aioRenderTrail() {
+    var el = document.getElementById('aio-trail');
+    var parts = [];
+    if (aioState) {
+        ['kommune', 'bezirk', 'strasse', 'hnr'].forEach(function(k) {
+            if (aioState[k] && aioState[k].name) parts.push(aioState[k].name);
         });
+    }
+    if (parts.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = '';
+    var b = document.createElement('strong');
+    b.textContent = tt('LOCATION', 'SELECTED') + ' ';
+    el.appendChild(b);
+    el.appendChild(document.createTextNode(parts.join(' › ')));
 }
 
-function selectHnr(item, ev) {
-    selectedHnr = item;
-    document.querySelectorAll('#hnr-results .search-result').forEach(function(r) { r.classList.remove('selected'); });
-    if (ev && ev.target) ev.target.classList.add('selected');
-    document.getElementById('selected-hnr').textContent = item.name;
-    document.getElementById('location-selection').style.display = 'block';
+function aioStep() {
+    var group = document.getElementById('aio-level-group');
+    group.style.display = 'none';
+    aioShowMsg(tt('HAUSMUELL', 'MSG_LOADING'));
+    abfallioPostForm({ action: 'aio_step', state: JSON.stringify(aioState) })
+        .then(function(resp) {
+            if (resp && resp.error === 'service_key_required') {
+                aioShowMsg(tt('LOCATION', 'MSG_SERVICE_KEY_REQUIRED'), '#b71c1c');
+                document.getElementById('aio-start-group').style.display = 'block';
+                return;
+            }
+            if (!resp || resp.error) {
+                aioShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED') + (resp && resp.error ? ': ' + resp.error : ''), '#c62828');
+                document.getElementById('aio-start-group').style.display = 'block';
+                return;
+            }
+            if (resp.api) aioState.api = resp.api;
+            if (resp.done) {
+                if (resp.house_id) aioState.house_id = String(resp.house_id);
+                if (resp.complete) {
+                    aioShowMsg('');
+                    document.getElementById('location-selection').style.display = 'block';
+                } else {
+                    aioShowMsg(tt('LOCATION', 'MSG_INCOMPLETE'), '#b71c1c');
+                    document.getElementById('aio-start-group').style.display = 'block';
+                }
+                return;
+            }
+            aioShowMsg('');
+            aioLevel = resp.level;
+            aioItems = Array.isArray(resp.items) ? resp.items : [];
+            document.getElementById('aio-level-label').textContent = tt('LOCATION', 'LEVEL_' + String(resp.level).toUpperCase());
+            var f = document.getElementById('aio-filter');
+            f.value = '';
+            group.style.display = 'block';
+            aioRenderList();
+            f.focus();
+        })
+        .catch(function() { aioShowMsg(tt('STATUS', 'MSG_CONNECTION_ERROR'), '#c62828'); });
 }
 
-function saveLocation() {
-    if (!selectedStreet || !selectedHnr) {
-        alert(tt('LOCATION','MSG_PICK_BOTH'));
+function aioRenderList() {
+    var el = document.getElementById('aio-results');
+    var q = hmFold(document.getElementById('aio-filter').value.trim());
+    var shown = aioItems.filter(function(it) { return q === '' || hmFold(it.name).indexOf(q) !== -1; });
+    el.innerHTML = '';
+    if (shown.length === 0) {
+        el.innerHTML = '<div class="search-result-msg" style="color:#999;">' + tt('LOCATION', 'MSG_NO_RESULTS') + '</div>';
         return;
     }
-    var data = {
-        action: 'save_location',
-        kommune_id: '',
-        street_id: selectedStreet.id,
-        street_name: selectedStreet.name,
-        hnr_id: selectedHnr.id,
-        hnr_name: selectedHnr.name
-    };
-    abfallioPostForm(data)
+    shown.forEach(function(it) {
+        var div = document.createElement('div');
+        div.className = 'search-result';
+        div.textContent = it.name;
+        div.onclick = function() { aioPick(it); };
+        el.appendChild(div);
+    });
+}
+
+function aioPick(item) {
+    if (!aioState || !aioLevel) return;
+    aioState[aioLevel] = { id: String(item.id), name: item.name };
+    if (item.house_id) aioState.house_id = String(item.house_id);
+    aioRenderTrail();
+    aioStep();
+}
+
+function aioSave() {
+    if (!aioState) return;
+    var done = abfallioButtonBusy(document.getElementById('btn-aio-save'));
+    abfallioPostForm({ action: 'aio_save', state: JSON.stringify(aioState) })
         .then(function(resp) {
-            if (resp.success) {
+            done(!!(resp && resp.success));
+            if (resp && resp.success) {
                 showAlert('tab-location', tt('LOCATION', 'MSG_SAVED'), 'success');
                 setTimeout(function() {
                     var u = new URL(window.location.href);
@@ -1270,13 +1272,16 @@ function saveLocation() {
                     window.location.href = u.toString();
                 }, 800);
             } else {
-                showAlert('tab-location', 'Error: ' + (resp.error || 'Unknown'), 'error');
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
             }
         })
-        .catch(function() {
-            showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error');
-        });
+        .catch(function() { done(false); showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
 }
+
+(function aioInit() {
+    var f = document.getElementById('aio-filter');
+    if (f) f.addEventListener('input', aioRenderList);
+})();
 
 /* ---- Data source switch + hausmuell.info address cascade ---- */
 var hmState = null;

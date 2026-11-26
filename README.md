@@ -22,7 +22,7 @@ and exposes them as JSON, flat-text (Loxone) and MQTT topics. Five upstreams are
 
 | Data source | Coverage | Address selection |
 |---|---|---|
-| [api.abfall.io](#apiabfallio) (AbfallPlus) | many municipalities across Germany (region list from the Home Assistant community) | region / service key → street → house number |
+| [api.abfall.io](#apiabfallio) (AbfallPlus) | many municipalities across Germany (region list from the Home Assistant community) | region / service key → (Gemeinde) → (Ortsteil) → street → (house number); legacy and v3 API |
 | [hausmuell.info](#hausmuellinfo-portals) (ATURIS) | 6 portals: Schmalkalden-Meiningen, Suhl, Eichsfeld, Wartburgkreis, Börde, Wesel | portal → Ort → (Ortsteil) → (Straße) → (Hausnummer) |
 | [Müllabfuhr Deutschland](#müllabfuhr-deutschland) | 7 districts: Hildburghausen, Weimarer Land, Sömmerda, Wittenberg, Burgenlandkreis, Dessau-Roßlau, Saalekreis (list read live) | district → Ort → (Ortsteil) → (Straße) |
 | [AWIDO](#awido) (cubefour) | 49 districts/towns — Bavaria 33 (e.g. Haßberge, Schweinfurt, Coburg, Kronach, Kulmbach, Rosenheim), Hesse 6 (e.g. Fulda, Gießen), Thuringia 3 (Gotha, Saale-Orla, Altenburger Land), Baden-Württemberg 3, Rhineland-Palatinate 3, Lower Saxony 1 | operator → Ort → Straße/Bereich → (Hausnummer) |
@@ -101,11 +101,24 @@ All sources need **no account**. The data source is chosen at the top of the **L
 
 ### api.abfall.io
 
-Public [`api.abfall.io`](https://api.abfall.io/). Schedules are fetched as **ICS** in the background and normalised — no manual ICS files. **No personal account** on api.abfall.io. Each provider has a **32-character hex service key** (same as on municipal “Abfuhrtermine” pages). **Location** tab: pick region or expert key → **Save region & settings**; then street search. Until a key is saved, street search and fetch are disabled. Finding the key: browser **Network** tab on ICS export, or community docs (e.g. Home Assistant [abfall.io source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io.md)).
+Public [`api.abfall.io`](https://api.abfall.io/). Schedules are fetched as **ICS** in the background and normalised — no manual ICS files. **No personal account** on api.abfall.io. Each provider has a **32-character hex service key** (same as on municipal “Abfuhrtermine” pages). **Location** tab: pick region or expert key → **Save region & settings**; then **Select address**. Until a key is saved, address selection and fetch are disabled. Finding the key: browser **Network** tab on ICS export, or community docs (e.g. Home Assistant [abfall.io source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io.md)).
+
+**Address selection (since 1.6):** after saving the region, **Select address** walks the operator's own levels —
+Gemeinde → (Ortsteil/Bezirk) → Straße → Hausnummer. Two API generations are detected automatically:
+
+- **legacy form API** — many operators start with the municipality (e.g. Landkreis Landshut, AWB Westerwaldkreis);
+  every step is submitted so the export gets the right server-side state. Previously the plugin offered the
+  municipalities as "streets" and returned wrong dates (upstream issues #24, #25).
+- **abfall.io v3 (GraphQL)** — operators that migrated answer 401 on the legacy API or return JSON on init (e.g.
+  Bautzen, Essen, Duisburg, Göttingen; upstream issues #11, #22). Some operators moved to v3 **with a new key**;
+  the region list now merges Home Assistant's v3 list, and an old key that is rejected by both APIs produces a hint
+  to look up the current key (browser network tab on the operator's calendar page, request `api.abfall.io?key=…`).
+
+Configurations saved with the original street search keep working unchanged.
 
 **Supported regions:** the **Location** tab lists them in the collapsible *“Which regions work?”* block (names from the bundled autocomplete data).
 
-- **Source:** community list aligned with Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) / *AbfallIO* `SERVICE_MAP`; plugin can **refresh online** (`AbfallIO.py`).
+- **Source:** community lists from Home Assistant [`waste_collection_schedule`](https://github.com/mampfes/hacs_waste_collection_schedule) — *AbfallIO* (legacy) and *AbfallIOGraphQL* (v3) `SERVICE_MAP`, merged; plugin can **refresh online**. Status November 2026: 53 entries, 24 on the legacy API, 13 on v3, 16 keys rejected by abfall.io (operator migrated, new key unknown).
 - **Bundled:** `data/abfallio-service-map.json` (in the ZIP).
 - **Override:** `<LBHOMEDIR>/data/plugins/<FOLDER>/abfallio-service-map.json` if present.
 - **Town missing?** Try expert **service key**, or check the [other data sources](#which-data-source-do-i-need).
@@ -199,7 +212,8 @@ Clone, `npm install`, `npm run typecheck`, `npm test`, `npm run build`. Full gat
 In the *Standort* / *Location* tab, first choose the **data source** (radio buttons at the top), then:
 
 - **api.abfall.io:** choose **waste region** (autocomplete) or expert **service key** → **Save region & settings** →
-  search a street (min. 3 characters) → house number if required → **Save location**
+  **Select address** → click through municipality / district / street / house number (as the operator requires) →
+  **Save location**
 - **hausmuell.info / Müllabfuhr Deutschland / AWIDO / Abfuhr-Wecker:** choose the portal, district or operator from the
   list, then click through the address steps (each list has a filter field) → **Save address**. With an address
   already saved, the tab shows it and only starts a new selection on **Start selection over** or another operator.
