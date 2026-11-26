@@ -809,7 +809,7 @@ if (!$use_loxberry_frame) {
             </div>
             <div class="form-group">
                 <label><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'LABEL_MQTT_PORT')) ?></label>
-                <input type="number" id="mqtt-port" value="<?= $mqttPort ?>" min="1" max="65535">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" data-role="none" id="mqtt-port" value="<?= $mqttPort ?>" maxlength="5" autocomplete="off">
             </div>
         </div>
 

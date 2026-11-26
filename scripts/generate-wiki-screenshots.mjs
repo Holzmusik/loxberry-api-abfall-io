@@ -104,7 +104,13 @@ async function captureTab(page, route, tabId, targetFile) {
   await sanitizeUi(page);
   await activateTab(page, tabId);
   await page.waitForTimeout(120);
-  await page.screenshot({ path: targetFile, type: "jpeg", quality: 70, fullPage: true });
+  // Only the plugin panel: the LoxBerry sidebar would show the appliance's other installed plugins.
+  const panel = page.locator("#abfallio-root, .plugin-container").first();
+  if ((await panel.count()) > 0) {
+    await panel.screenshot({ path: targetFile, type: "jpeg", quality: 80 });
+  } else {
+    await page.screenshot({ path: targetFile, type: "jpeg", quality: 70, fullPage: true });
+  }
 }
 
 async function run() {
