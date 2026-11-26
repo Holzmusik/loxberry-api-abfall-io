@@ -772,6 +772,9 @@ if (!$use_loxberry_frame) {
             <datalist id="categories-datalist"></datalist>
             <small><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'HELP_CATEGORIES')) ?></small>
             <div id="category-filter-checkboxes" class="category-filter-checkboxes" role="group" aria-label="<?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'ARIA_CATEGORIES')) ?>"></div>
+            <div style="margin-top:0.5rem;">
+                <button type="button" class="btn btn-secondary" id="btn-reset-filter" onclick="abfallioResetFilter(this)"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'BTN_RESET_FILTER')) ?></button>
+            </div>
         </div>
 
         <h3 class="section-title"><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'SECTION_INTEGRATION')) ?></h3>
@@ -2049,12 +2052,35 @@ function abfallioButtonBusy(btn) {
     };
 }
 
+/** Empty the category filter (= all categories), save, and fetch so the table shows everything again. */
+function abfallioResetFilter(btn) {
+    var inp = document.getElementById('categories-filter');
+    if (inp) inp.value = '';
+    document.querySelectorAll('#category-filter-checkboxes input.cat-filter-cb').forEach(function(cb) { cb.checked = false; });
+    saveSettings('tab-settings', function() {
+        abfallioFetchWithTimeout({ action: 'fetch_now' }, 30000)
+            .then(function(resp) {
+                if (resp && !resp.error) {
+                    abfallioLastTermine = resp.termine || {};
+                    abfallioRefreshCategoryUI(abfallioLastTermine);
+                }
+            })
+            .catch(function() { /* list refreshes on the next status load */ });
+    }, btn);
+}
+
 function saveSettings(alertTab, onSuccess, btn) {
     var tab = alertTab || 'tab-settings';
     var done = abfallioButtonBusy(btn);
     var filter = document.getElementById('categories-filter').value.trim();
     var filterArr = filter ? filter.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-    abfallioPostForm({
+    // From the Location tab only the region is stored: the other fields on this page may be stale
+    // (e.g. MQTT enabled meanwhile in another tab) and must not overwrite the saved settings.
+    var payload = tab === 'tab-location' ? {
+        action: 'save_settings',
+        only_region: '1',
+        service_key: document.getElementById('service-key').value.trim()
+    } : {
         action: 'save_settings',
         service_key: document.getElementById('service-key').value.trim(),
         fetch_interval_hours: document.getElementById('fetch-interval').value,
@@ -2068,7 +2094,8 @@ function saveSettings(alertTab, onSuccess, btn) {
         mqtt_password: document.getElementById('mqtt-password').value,
         mqtt_topic_prefix: document.getElementById('mqtt-topic').value,
         mqtt_retain: document.getElementById('mqtt-retain').checked ? '1' : '0'
-    })
+    };
+    abfallioPostForm(payload)
         .then(function(resp) {
             if (resp.success) {
                 done(true);

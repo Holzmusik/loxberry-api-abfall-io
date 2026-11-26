@@ -433,6 +433,15 @@ switch ($action) {
         if ($sk === '') {
             $config['location'] = [];
         }
+        // Location tab ("save region"): store only the region. Posting every settings field from a page that may
+        // have been loaded earlier silently reverted other settings (e.g. MQTT switched off again).
+        if (!empty($_POST['only_region'])) {
+            if ($old_sk !== '' && $config['service_key'] !== $old_sk) {
+                $config['categories_filter'] = [];
+            }
+            file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            json_response(['success' => true]);
+        }
         $config['fetch_interval_hours'] = max(6, min(168, intval($_POST['fetch_interval_hours'] ?? 6)));
         $config['fetch_fuzz_minutes'] = max(0, min(360, intval($_POST['fetch_fuzz_minutes'] ?? 30)));
         $filter_raw = $_POST['categories_filter'] ?? '[]';
