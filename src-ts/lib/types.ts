@@ -4,6 +4,17 @@ export interface LocationConfig {
   f_id_strasse_hnr?: string;
   street_name?: string;
   hnr_name?: string;
+  /**
+   * Set by the click-through address selection (since 1.6): which abfall.io API generation the key uses.
+   * Configs without it use the original street-first flow unchanged.
+   */
+  api?: "legacy" | "v3";
+  kommune?: { id: string; name: string };
+  bezirk?: { id: string; name: string };
+  strasse?: { id: string; name: string };
+  hnr?: { id: string; name: string };
+  /** v3: idHouseNumber. */
+  house_id?: string;
 }
 
 export interface MqttConfig {

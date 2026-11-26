@@ -9,6 +9,28 @@ import type { PluginConfig } from "./types.js";
 export const DEFAULT_SERVICE_MAP_SOURCE_URL =
   "https://raw.githubusercontent.com/mampfes/hacs_waste_collection_schedule/master/custom_components/waste_collection_schedule/waste_collection_schedule/service/AbfallIO.py";
 
+/** Home Assistant list of customers on the abfall.io v3 (GraphQL) API — many migrated with a new key. */
+export const DEFAULT_V3_SERVICE_MAP_SOURCE_URL =
+  "https://raw.githubusercontent.com/mampfes/hacs_waste_collection_schedule/master/custom_components/waste_collection_schedule/waste_collection_schedule/service/AbfallIOGraphQL.py";
+
+/**
+ * Merge the legacy and v3 lists: a v3 entry with the same title replaces the legacy entry (its old key no longer
+ * works), other v3 entries are appended; duplicate keys are dropped.
+ */
+export function mergeServiceMaps(legacy: ServiceMapEntry[], v3: ServiceMapEntry[]): ServiceMapEntry[] {
+  const norm = (s: string): string => s.trim().toLowerCase();
+  const v3Titles = new Set(v3.map((e) => norm(e.title)));
+  const out = legacy.filter((e) => !v3Titles.has(norm(e.title)));
+  const seen = new Set(out.map((e) => e.service_id));
+  for (const e of v3) {
+    if (!seen.has(e.service_id)) {
+      out.push(e);
+      seen.add(e.service_id);
+    }
+  }
+  return out;
+}
+
 const FETCH_TIMEOUT_MS = 45_000;
 
 function isHttpsUrl(href: string): boolean {
@@ -135,6 +157,16 @@ export async function refreshServiceMapToUserFile(
   }
   if (entries.length < 1) {
     return { success: false, error: "No regions parsed from source", source_url: href };
+  }
+  // With the default source, also merge the abfall.io v3 (GraphQL) list: customers that migrated got new keys.
+  if (href === DEFAULT_SERVICE_MAP_SOURCE_URL) {
+    try {
+      const v3 = parseServiceMapFromAbfallIoPy(await fetchServiceMapBody(DEFAULT_V3_SERVICE_MAP_SOURCE_URL));
+      entries = mergeServiceMaps(entries, v3);
+      log.info(`Service map: merged ${v3.length} abfall.io v3 entries`);
+    } catch (e) {
+      log.warn(`Service map: v3 list not merged (${e instanceof Error ? e.message : String(e)})`);
+    }
   }
   const { dataDir } = resolvePaths();
   fs.mkdirSync(dataDir, { recursive: true });

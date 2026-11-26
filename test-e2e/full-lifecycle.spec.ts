@@ -247,38 +247,33 @@ test.describe("@e2e abfallio full plugin lifecycle (destructive)", () => {
       timeout: 15_000,
     });
 
-    // Step 1: search the street.
-    const search = page.locator("#street-search");
-    await expect(search).toBeVisible();
-    await search.fill("");
-    await search.type(streetQuery, { delay: 30 });
-
-    const results = page.locator("#street-results .search-result");
-    await expect(
-      results.first(),
-      "no street search results returned by api.abfall.io",
-    ).toBeVisible({ timeout: 30_000 });
-
-    // Prefer the result that matches TEST_STREET_NAME if provided, otherwise
-    // fall back to the first hit.
-    const target = expectedStreet
-      ? results.filter({ hasText: new RegExp(expectedStreet, "i") }).first()
-      : results.first();
-    const haveTarget = (await target.count()) > 0;
-    await (haveTarget ? target : results.first()).click();
-
-    // Step 2: house number is sometimes required, sometimes not.
-    const hnrGroup = page.locator("#hnr-group");
-    await page.waitForTimeout(1500);
-    if (await hnrGroup.isVisible()) {
-      const hnrItems = page.locator("#hnr-results .search-result");
-      await expect(hnrItems.first()).toBeVisible({ timeout: 30_000 });
-      // Pick the first available house number (the test fixture only requires
-      // that *some* valid number is selected; numbers vary per municipality).
-      await hnrItems.first().click();
+    // Steps 1+2: click-through address (Gemeinde → Ortsteil → Straße → Hausnummer, levels depend on
+    // the operator). On the street level filter for TEST_STREET_QUERY / prefer TEST_STREET_NAME; on every
+    // other level the first entry is fine for the fixture.
+    await page.locator("#btn-aio-start").click();
+    const results = page.locator("#aio-results .search-result");
+    const filter = page.locator("#aio-filter");
+    const levelLabel = page.locator("#aio-level-label");
+    for (let level = 0; level < 5; level++) {
+      const ready = await Promise.race([
+        results.first().waitFor({ state: "visible", timeout: 30_000 }).then(() => "list"),
+        page.locator("#location-selection").waitFor({ state: "visible", timeout: 30_000 }).then(() => "done"),
+      ]);
+      if (ready === "done") break;
+      const isStreetLevel = /stra(ss|ß)e|street/i.test((await levelLabel.textContent()) ?? "");
+      if (isStreetLevel && streetQuery) {
+        await filter.fill(streetQuery);
+      }
+      const target =
+        isStreetLevel && expectedStreet
+          ? results.filter({ hasText: new RegExp(expectedStreet, "i") }).first()
+          : results.first();
+      await expect(results.first(), "no address entries returned by api.abfall.io").toBeVisible({ timeout: 30_000 });
+      await ((await target.count()) > 0 ? target : results.first()).click();
+      await page.waitForTimeout(500);
     }
 
-    // Step 3: confirm and save. saveLocation() in the UI takes care of:
+    // Step 3: confirm and save. aioSave() in the UI takes care of:
     //   - persisting the location (AJAX),
     //   - auto-switching to the Status & Data tab after ~800ms,
     //   - automatically calling doFetch() to trigger a real API call.

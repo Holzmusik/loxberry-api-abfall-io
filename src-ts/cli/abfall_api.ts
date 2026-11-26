@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   clearLog,
+  configuredServiceKey,
   fetchData,
   getLog,
   getStatus,
@@ -16,6 +17,12 @@ import {
   nextStep,
   sanitizeHausmuellState,
 } from "../lib/hausmuell-service.js";
+import {
+  cascadeLabel,
+  isCascadeComplete,
+  nextStep as aioNextStep,
+  sanitizeCascadeState,
+} from "../lib/abfallio-cascade.js";
 import {
   AWIDO_CUSTOMERS,
   isAwidoAddressComplete,
@@ -155,6 +162,46 @@ async function main(): Promise<void> {
       ...(sameRegion ? {} : { categories_filter: [] }),
     });
     printJson({ success: true, filter_cleared: !sameRegion && (prev.categories_filter?.length ?? 0) > 0 });
+    return;
+  }
+
+  if (command === "aio_step") {
+    // aio_step b64:<AbfallioCascadeState JSON> → next abfall.io address level (legacy or v3 API), or done.
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeCascadeState(raw ? JSON.parse(raw) : {});
+    const key = configuredServiceKey(loadConfig());
+    if (!key) {
+      printJson({ error: "service_key_required" });
+      return;
+    }
+    printJson(await aioNextStep(key, state));
+    return;
+  }
+
+  if (command === "aio_save") {
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeCascadeState(raw ? JSON.parse(raw) : {});
+    if (!isCascadeComplete(state)) {
+      printJson({ success: false, error: "Address incomplete" });
+      process.exit(1);
+    }
+    const prev = loadConfig();
+    const label = cascadeLabel(state);
+    saveConfig({
+      ...prev,
+      provider: "abfallio",
+      location: {
+        ...state,
+        // Keep the classic fields filled for displays and tools that read them.
+        f_id_kommune: state.kommune?.id ?? "",
+        f_id_strasse: state.strasse?.id ?? "",
+        f_id_strasse_hnr: state.hnr?.id ?? "",
+        street_name: label,
+        hnr_name: "",
+      },
+      ...(prev.provider && prev.provider !== "abfallio" ? { categories_filter: [] } : {}),
+    });
+    printJson({ success: true });
     return;
   }
 

@@ -28,7 +28,7 @@ async function main(): Promise<void> {
       log.warn("No service key (waste region) configured — open the plugin admin, Settings, choose your region, save, then set Location. Skipping fetch.");
       return;
     }
-    if (!config.location?.f_id_strasse) {
+    if (!isLocationComplete(config)) {
       log.warn("No location configured, skipping fetch");
       return;
     }
