@@ -1666,6 +1666,28 @@ function downloadJSON() {
     window.open(ajaxUrl + '?action=download_json', '_blank');
 }
 
+/**
+ * Bin colour for the status table dot, guessed from the category name (display only;
+ * no upstream delivers a colour). Order matters: "Gelbe Tonne" before "Tonne"-generic rules.
+ */
+function abfallioCategoryColor(name) {
+    var n = String(name || '').toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var rules = [
+        [/schadstoff|problem|sonderabfall/, '#e53935'],
+        [/gelb|leichtverpack|\blvp\b|dsd|wertstoff|verpackung/, '#fbc02d'],
+        [/papier|pappe|karton|blaue|blau/, '#1e88e5'],
+        [/bio|braun|kompost|organic/, '#8d6e63'],
+        [/glas/, '#26a69a'],
+        [/weihnacht|tannenbaum|baum|strauch|grun|garten|laub/, '#43a047'],
+        [/sperr/, '#8e24aa'],
+        [/rest|haus|graue|grau|schwarz/, '#546e7a']
+    ];
+    for (var i = 0; i < rules.length; i++) {
+        if (rules[i][0].test(n)) return rules[i][1];
+    }
+    return '#999';
+}
+
 function loadStatus() {
     abfallioGetJson({ action: 'status' })
         .then(function(data) {
@@ -1734,7 +1756,7 @@ function loadStatus() {
             var badgeClass = entry.tage <= 2 ? 'soon' : (entry.tage <= 7 ? 'normal' : 'far');
             var wd = entry.wochentag != null ? entry.wochentag : '–';
             var wn = (entry.wochentag_num != null && entry.wochentag_num > 0) ? String(entry.wochentag_num) : '–';
-            html += '<tr><td><span class="cat-dot" style="background:' + (entry.color || '#999') + '"></span>' +
+            html += '<tr><td><span class="cat-dot" style="background:' + (entry.color || abfallioCategoryColor(name)) + '"></span>' +
                 name + '</td><td>' + entry.datum + '</td><td>' + wd + '</td><td>' + wn +
                 '</td><td><span class="days-badge ' + badgeClass + '">' + entry.tage + '</span></td></tr>';
         });
