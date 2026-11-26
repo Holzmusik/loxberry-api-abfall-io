@@ -255,6 +255,7 @@ $waste_plugin_css .= <<<'WASTE_CSS'
             background: #fff !important; color: #333 !important; -webkit-text-fill-color: #333 !important; text-shadow: none !important;
         }
         #abfallio-root .tab-content input[readonly] { background: #f8f9fa !important; }
+        #abfallio-root .tab-content input[data-role="none"] { border: 1px solid #ddd !important; border-radius: 6px; padding: 10px 12px !important; }
         #abfallio-root .tab-content input::placeholder { color: #999 !important; -webkit-text-fill-color: #999 !important; }
         #abfallio-root .tab-content .ui-input-text input { border: none !important; }
         #abfallio-root .category-filter-checkboxes input[type="checkbox"],
@@ -598,11 +599,13 @@ if (!$use_loxberry_frame) {
         <div class="form-row">
             <div class="form-group">
                 <label><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'LABEL_INTERVAL')) ?></label>
-                <input type="number" id="fetch-interval" value="<?= $fetchInterval ?>" min="6" max="168">
+                <?php /* data-role="none" + text/numeric: LoxBerry's head.html sets $.mobile.degradeInputs.number,
+                         which rebuilt these fields and left them empty and not editable. Range is enforced server-side. */ ?>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" data-role="none" id="fetch-interval" value="<?= $fetchInterval ?>" maxlength="3" autocomplete="off">
             </div>
             <div class="form-group">
                 <label><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'LABEL_FUZZ')) ?></label>
-                <input type="number" id="fetch-fuzz" value="<?= $fetchFuzz ?>" min="0" max="360">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" data-role="none" id="fetch-fuzz" value="<?= $fetchFuzz ?>" maxlength="3" autocomplete="off">
                 <small><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'HELP_FUZZ')) ?></small>
             </div>
         </div>
