@@ -25,7 +25,7 @@ and exposes them as JSON, flat-text (Loxone) and MQTT topics. Five upstreams are
 | [api.abfall.io](#apiabfallio) (AbfallPlus) | many municipalities across Germany (region list from the Home Assistant community) | region / service key → street → house number |
 | [hausmuell.info](#hausmuellinfo-portals) (ATURIS) | 6 portals: Schmalkalden-Meiningen, Suhl, Eichsfeld, Wartburgkreis, Börde, Wesel | portal → Ort → (Ortsteil) → (Straße) → (Hausnummer) |
 | [Müllabfuhr Deutschland](#müllabfuhr-deutschland) | 7 districts: Hildburghausen, Weimarer Land, Sömmerda, Wittenberg, Burgenlandkreis, Dessau-Roßlau, Saalekreis (list read live) | district → Ort → (Ortsteil) → (Straße) |
-| [AWIDO](#awido) (cubefour) | 49 districts/towns, mainly Bavaria, Hesse, Baden-Württemberg, Thuringia (e.g. Haßberge, Gotha, Saale-Orla, Altenburger Land, Schweinfurt, Coburg) | operator → Ort → Straße/Bereich → (Hausnummer) |
+| [AWIDO](#awido) (cubefour) | 49 districts/towns — Bavaria 33 (e.g. Haßberge, Schweinfurt, Coburg, Kronach, Kulmbach, Rosenheim), Hesse 6 (e.g. Fulda, Gießen), Thuringia 3 (Gotha, Saale-Orla, Altenburger Land), Baden-Württemberg 3, Rhineland-Palatinate 3, Lower Saxony 1 | operator → Ort → Straße/Bereich → (Hausnummer) |
 | [Abfuhr-Wecker](#abfuhr-wecker-offizium) (offizium) | Landkreis Rhön-Grabfeld | district → Gemeinde → Ortsteil |
 
 Steps in parentheses only appear where the operator needs them. All sources run through the same parser, category
@@ -156,7 +156,7 @@ the ICS export.
 49 customers, all verified end-to-end in November 2026 (one address each): list in `AWIDO_CUSTOMERS` in
 [`src-ts/lib/awido-service.ts`](./src-ts/lib/awido-service.ts), derived from the Home Assistant
 [`awido_de` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/awido_de.md)
-(deduplicated) plus Landkreis Haßberge. Among them in Thuringia: Gotha, Saale-Orla, Altenburger Land.
+(deduplicated) plus Landkreis Haßberge. By state: Bavaria 33, Hesse 6, Thuringia 3 (Gotha, Saale-Orla, Altenburger Land), Baden-Württemberg 3, Rhineland-Palatinate 3, Lower Saxony 1 (Gifhorn).
 
 ### Abfuhr-Wecker (offizium)
 
