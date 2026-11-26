@@ -17,6 +17,12 @@ import {
   sanitizeHausmuellState,
 } from "../lib/hausmuell-service.js";
 import {
+  AWIDO_CUSTOMERS,
+  isAwidoAddressComplete,
+  nextStep as awNextStep,
+  sanitizeAwidoState,
+} from "../lib/awido-service.js";
+import {
   isMuellabfuhrAddressComplete,
   listMandators,
   nextStep as mfNextStep,
@@ -37,7 +43,8 @@ async function main(): Promise<void> {
     process.stdout.write(
       "Commands: search_street <q>, search_hnr <street_id>, search_service <q>, refresh_service_map [url], " +
         "hm_providers, hm_step <state_json>, hm_save <state_json>, mf_mandators, mf_step <state_json>, " +
-        "mf_save <state_json>, set_provider <id>, fetch, status, log\n",
+        "mf_save <state_json>, aw_customers, aw_step <state_json>, aw_save <state_json>, set_provider <id>, " +
+        "fetch, status, log\n",
     );
     process.exit(1);
   }
@@ -144,9 +151,45 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "aw_customers") {
+    printJson(AWIDO_CUSTOMERS);
+    return;
+  }
+
+  if (command === "aw_step") {
+    // aw_step b64:<AwidoState JSON> → next level (place / street / hnr) with its list, or done.
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const state = sanitizeAwidoState(raw ? JSON.parse(raw) : {});
+    if (!state.customer) {
+      printJson({ error: "Invalid AWIDO customer" });
+      process.exit(1);
+    }
+    printJson(await awNextStep(state));
+    return;
+  }
+
+  if (command === "aw_save") {
+    const raw = decodeShellQueryArg(args[0] ?? "");
+    const address = sanitizeAwidoState(raw ? JSON.parse(raw) : {});
+    if (!isAwidoAddressComplete(address)) {
+      printJson({ success: false, error: "Address incomplete" });
+      process.exit(1);
+    }
+    const prev = loadConfig();
+    const sameRegion = prev.provider === "awido" && prev.awido?.customer === address.customer;
+    saveConfig({
+      ...prev,
+      provider: "awido",
+      awido: address,
+      ...(sameRegion ? {} : { categories_filter: [] }),
+    });
+    printJson({ success: true, filter_cleared: !sameRegion && (prev.categories_filter?.length ?? 0) > 0 });
+    return;
+  }
+
   if (command === "set_provider") {
     const provider = args[0];
-    if (provider !== "abfallio" && provider !== "hausmuell" && provider !== "muellabfuhr") {
+    if (provider !== "abfallio" && provider !== "hausmuell" && provider !== "muellabfuhr" && provider !== "awido") {
       printJson({ success: false, error: "Unknown provider" });
       process.exit(1);
     }

@@ -16,6 +16,7 @@ import {
   isValidMandatorId,
   muellabfuhrLocationLabel,
 } from "./muellabfuhr-service.js";
+import { awidoLocationLabel, customerTitle, fetchAwido, isAwidoAddressComplete, isValidCustomer } from "./awido-service.js";
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
 import type {
   ApiStatus,
@@ -310,11 +311,14 @@ const PROVIDER_LABEL: Record<ProviderId, string> = {
   abfallio: "api.abfall.io",
   hausmuell: "hausmuell.info",
   muellabfuhr: "muellabfuhr-deutschland.de",
+  awido: "AWIDO (cubefour)",
 };
 
 /** Active upstream; configs written before the provider switch existed are abfall.io. */
 export function activeProvider(cfg: PluginConfig): ProviderId {
-  return cfg.provider === "hausmuell" || cfg.provider === "muellabfuhr" ? cfg.provider : "abfallio";
+  return cfg.provider === "hausmuell" || cfg.provider === "muellabfuhr" || cfg.provider === "awido"
+    ? cfg.provider
+    : "abfallio";
 }
 
 /** True once the chosen upstream has everything it needs to download a calendar. */
@@ -324,6 +328,8 @@ export function isLocationComplete(cfg: PluginConfig): boolean {
       return isHausmuellAddressComplete(cfg.hausmuell);
     case "muellabfuhr":
       return isMuellabfuhrAddressComplete(cfg.muellabfuhr);
+    case "awido":
+      return isAwidoAddressComplete(cfg.awido);
     default:
       return configuredServiceKey(cfg) !== "" && !!cfg.location?.f_id_strasse;
   }
@@ -335,9 +341,21 @@ export async function fetchData(config = loadConfig()): Promise<WasteData> {
       return fetchHausmuellData(config);
     case "muellabfuhr":
       return fetchMuellabfuhrData(config);
+    case "awido":
+      return fetchAwidoData(config);
     default:
       return fetchAbfallioData(config);
   }
+}
+
+async function fetchAwidoData(config: PluginConfig): Promise<WasteData> {
+  const aw = config.awido ?? {};
+  if (!isAwidoAddressComplete(aw)) {
+    throw new Error("No AWIDO address configured. On the Location tab, choose the operator and select your address.");
+  }
+  log.info(`Fetching data from AWIDO: ${customerTitle(aw.customer)} / ${awidoLocationLabel(aw)}`);
+  const { ics } = await fetchAwido(aw);
+  return finalizeAndCache(config, ics, awidoLocationLabel(aw));
 }
 
 async function fetchMuellabfuhrData(config: PluginConfig): Promise<WasteData> {
@@ -505,6 +523,12 @@ export function getStatus(): ApiStatus {
     region_title = has_region ? mf.mandator?.name || `#${mf.mandator?.id}` : "";
     has_street = isMuellabfuhrAddressComplete(mf);
     location = muellabfuhrLocationLabel(mf);
+  } else if (provider === "awido") {
+    const aw = cfg.awido ?? {};
+    has_region = isValidCustomer(aw.customer);
+    region_title = has_region ? customerTitle(aw.customer) : "";
+    has_street = isAwidoAddressComplete(aw);
+    location = awidoLocationLabel(aw);
   } else {
     has_region = key.length > 0;
     const map = loadServiceMap();

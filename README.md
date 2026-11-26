@@ -70,6 +70,7 @@ Two upstreams, chosen at the top of the **Location** tab (existing configs stay 
 1. **api.abfall.io** (default) — see below.
 2. **hausmuell.info** — ATURIS waste-calendar portals (`https://<subdomain>.hausmuell.info/`), see [hausmuell.info portals](#hausmuellinfo-portals).
 3. **Müllabfuhr Deutschland** — customer portal `https://portal.muellabfuhr-deutschland.de/`, see [Müllabfuhr Deutschland](#müllabfuhr-deutschland).
+4. **AWIDO** (cubefour) — waste calendars of 49 districts/towns, often embedded in the operator's own website, see [AWIDO](#awido).
 
 Both deliver ICS that runs through the same parser, category filter, cache, Loxone and MQTT output.
 
@@ -120,6 +121,19 @@ In November 2026 the portal served 7 districts, all verified end-to-end: Landkre
 Landkreis Sömmerda, Landkreis Wittenberg, Burgenlandkreis, Dessau-Roßlau, Saalekreis. Module:
 [`src-ts/lib/muellabfuhr-service.ts`](./src-ts/lib/muellabfuhr-service.ts) (same API as the Home Assistant
 [`muellabfuhr_de` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/muellabfuhr_de.md)).
+
+### AWIDO
+
+Many operators embed an AWIDO calendar (vendor cubefour, `awido.cubefour.de`) into their own website — e.g. awhas.de
+(Landkreis Haßberge) looks like a TYPO3 page but the data comes from AWIDO customer `awhas`. Pick the operator, then
+Ort → Straße/Bereich → Hausnummer (only where the operator distinguishes house numbers). Dates come from the JSON
+service (`getData`), which already spans the current and the next year; customers that do not serve JSON fall back to
+the ICS export.
+
+49 customers, all verified end-to-end in November 2026 (one address each): list in `AWIDO_CUSTOMERS` in
+[`src-ts/lib/awido-service.ts`](./src-ts/lib/awido-service.ts), derived from the Home Assistant
+[`awido_de` source](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/awido_de.md)
+(deduplicated) plus Landkreis Haßberge. Among them in Thuringia: Gotha, Saale-Orla, Altenburger Land.
 
 Switching to another portal or district clears the category filter, because category names differ between operators
 ("Restabfall" vs. "Restmüll" …) and a stale filter would hide every category.

@@ -34,7 +34,14 @@ $config_file = $plugin_config_dir . '/abfall.json';
 $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
 $location = $config['location'] ?? [];
 /* Upstream: api.abfall.io (default, also for configs from before the switch existed) or hausmuell.info */
-$provider = in_array(($config['provider'] ?? ''), ['hausmuell', 'muellabfuhr'], true) ? $config['provider'] : 'abfallio';
+$provider = in_array(($config['provider'] ?? ''), ['hausmuell', 'muellabfuhr', 'awido'], true) ? $config['provider'] : 'abfallio';
+$awConfig = is_array($config['awido'] ?? null) ? $config['awido'] : [];
+$awCustomer = (string) ($awConfig['customer'] ?? '');
+$awPlace = trim((string) (($awConfig['place'] ?? [])['name'] ?? ''));
+$awStreet = trim((string) (($awConfig['street'] ?? [])['name'] ?? ''));
+$awHnr = trim((string) (($awConfig['hnr'] ?? [])['name'] ?? ''));
+$awStreetHnr = trim(($awStreet !== $awPlace ? $awStreet : '') . ' ' . $awHnr);
+$awLocationLabel = implode(', ', array_filter([$awPlace, $awStreetHnr], 'strlen'));
 $mfConfig = is_array($config['muellabfuhr'] ?? null) ? $config['muellabfuhr'] : [];
 $mfMandatorId = (string) (($mfConfig['mandator'] ?? [])['id'] ?? '');
 $mfNames = [];
@@ -434,6 +441,10 @@ if (!$use_loxberry_frame) {
                 <input type="radio" name="abfallio-provider" value="muellabfuhr" <?= $provider === 'muellabfuhr' ? 'checked' : '' ?> onchange="abfallioSetProvider(this.value)" style="width:auto; margin-top:0.3em;">
                 <span><?= htmlspecialchars(AbfallioI18N::t('MUELLABFUHR', 'PROVIDER')) ?></span>
             </label>
+            <label style="display:flex; gap:0.5rem; align-items:flex-start; font-weight:normal; margin:0.2rem 0;">
+                <input type="radio" name="abfallio-provider" value="awido" <?= $provider === 'awido' ? 'checked' : '' ?> onchange="abfallioSetProvider(this.value)" style="width:auto; margin-top:0.3em;">
+                <span><?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'PROVIDER')) ?></span>
+            </label>
             <small><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'HELP_PROVIDER')) ?></small>
         </div>
 
@@ -518,6 +529,48 @@ if (!$use_loxberry_frame) {
             <div class="alert alert-info" style="margin-top: 20px;">
                 <strong><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'INFO_TITLE')) ?></strong>
                 <?= htmlspecialchars(AbfallioI18N::t('MUELLABFUHR', 'INFO_TEXT')) ?>
+            </div>
+        </div>
+
+        <!-- AWIDO (cubefour): Kunde, dann Ort → Straße/Bereich → (Hausnummer) -->
+        <div id="abfallio-provider-awido" data-testid="abfallio-provider-awido" style="<?= $provider === 'awido' ? '' : 'display:none;' ?>">
+            <h3 class="section-title" style="margin-top:0; padding-top:0; border-top:none;"><?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'SECTION_CUSTOMER')) ?></h3>
+            <div class="form-group">
+                <label for="aw-customer"><?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'LABEL_CUSTOMER')) ?></label>
+                <select id="aw-customer" data-saved="<?= htmlspecialchars($awCustomer) ?>">
+                    <option value=""><?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'PLACEHOLDER_CUSTOMER')) ?></option>
+                </select>
+                <small><?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'HELP_CUSTOMER')) ?></small>
+            </div>
+
+            <h3 class="section-title"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'SECTION_ADDRESS')) ?></h3>
+            <?php if ($awLocationLabel !== ''): ?>
+            <div class="selected-location" id="aw-current">
+                <strong><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'CURRENT_LOCATION')) ?></strong>
+                <?= htmlspecialchars($awLocationLabel) ?>
+            </div>
+            <?php endif; ?>
+
+            <div id="aw-trail" class="alert alert-info" style="display:none;"></div>
+            <div class="form-group" id="aw-level-group" style="display:none;">
+                <label for="aw-filter" id="aw-level-label"></label>
+                <input type="text" id="aw-filter" placeholder="<?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'PLACEHOLDER_FILTER')) ?>" autocomplete="off">
+                <div class="search-results" id="aw-results" style="display:block; max-height:320px; overflow-y:auto;"></div>
+            </div>
+            <div id="aw-msg" style="display:none; margin-bottom:0.75rem;"></div>
+
+            <div id="aw-selection" data-testid="abfallio-aw-selection" style="display:none;">
+                <button class="btn btn-primary" id="btn-aw-save" onclick="awSave()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_SAVE')) ?></button>
+            </div>
+
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <button type="button" class="btn btn-secondary" id="btn-aw-restart" onclick="awRestart()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_RESTART')) ?></button>
+                <button type="button" class="btn btn-secondary" id="btn-aw-reset" onclick="awReset()"><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'BTN_RESET')) ?></button>
+            </div>
+
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <strong><?= htmlspecialchars(AbfallioI18N::t('HAUSMUELL', 'INFO_TITLE')) ?></strong>
+                <?= htmlspecialchars(AbfallioI18N::t('AWIDO', 'INFO_TEXT')) ?>
             </div>
         </div>
 
@@ -1182,7 +1235,7 @@ var hmItems = [];
 var hmPortalsLoaded = false;
 
 function abfallioSetProvider(value) {
-    ['abfallio', 'hausmuell', 'muellabfuhr'].forEach(function(p) {
+    ['abfallio', 'hausmuell', 'muellabfuhr', 'awido'].forEach(function(p) {
         var el = document.getElementById('abfallio-provider-' + p);
         if (el) el.style.display = p === value ? '' : 'none';
     });
@@ -1197,6 +1250,7 @@ function abfallioSetProvider(value) {
         .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
     if (value === 'hausmuell') hmInit();
     if (value === 'muellabfuhr') mfInit();
+    if (value === 'awido') awInit();
 }
 
 function hmFold(s) {
@@ -1538,6 +1592,174 @@ function mfReset() {
         .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
 }
 
+/* ---- AWIDO (cubefour): customer, then Ort → Straße/Bereich → (Hausnummer) ---- */
+var awState = null;
+var awLevel = null;
+var awItems = [];
+var awLoaded = false;
+
+function awShowMsg(text, color) {
+    var el = document.getElementById('aw-msg');
+    if (!el) return;
+    if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = 'block';
+    el.style.color = color || '#999';
+    el.textContent = text;
+}
+
+function awInit() {
+    var sel = document.getElementById('aw-customer');
+    if (!sel || awLoaded) return;
+    awLoaded = true;
+    sel.addEventListener('change', function() { awRestart(); });
+    document.getElementById('aw-filter').addEventListener('input', awRenderList);
+    abfallioGetJson({ action: 'aw_customers' })
+        .then(function(list) {
+            if (!Array.isArray(list)) {
+                awShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED'), '#c62828');
+                return;
+            }
+            var saved = sel.getAttribute('data-saved') || '';
+            list.forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.customer;
+                o.textContent = c.title;
+                if (c.customer === saved) o.selected = true;
+                sel.appendChild(o);
+            });
+            hmRefreshSelect(sel);
+            if (document.getElementById('aw-current') && saved !== '' && sel.value === saved) {
+                awShowMsg('');
+                return;
+            }
+            awRestart();
+        })
+        .catch(function() { awShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED'), '#c62828'); });
+}
+
+function awRestart() {
+    var sub = document.getElementById('aw-customer').value;
+    awState = sub ? { customer: sub } : null;
+    awLevel = null;
+    awItems = [];
+    document.getElementById('aw-selection').style.display = 'none';
+    document.getElementById('aw-level-group').style.display = 'none';
+    awRenderTrail();
+    if (!awState) {
+        awShowMsg(tt('AWIDO', 'MSG_PICK_CUSTOMER'));
+        return;
+    }
+    awStep();
+}
+
+function awRenderTrail() {
+    var el = document.getElementById('aw-trail');
+    var parts = [];
+    if (awState) {
+        ['place', 'street', 'hnr'].forEach(function(k) {
+            if (awState[k] && awState[k].name) parts.push(awState[k].name);
+        });
+    }
+    if (parts.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = '';
+    var b = document.createElement('strong');
+    b.textContent = tt('HAUSMUELL', 'SELECTED') + ' ';
+    el.appendChild(b);
+    el.appendChild(document.createTextNode(parts.join(' › ')));
+}
+
+function awStep() {
+    var group = document.getElementById('aw-level-group');
+    group.style.display = 'none';
+    awShowMsg(tt('HAUSMUELL', 'MSG_LOADING'));
+    abfallioPostForm({ action: 'aw_step', state: JSON.stringify(awState) })
+        .then(function(resp) {
+            if (!resp || resp.error) {
+                awShowMsg(tt('HAUSMUELL', 'MSG_LOAD_FAILED') + (resp && resp.error ? ': ' + resp.error : ''), '#c62828');
+                return;
+            }
+            if (resp.done) {
+                if (resp.complete) {
+                    awShowMsg('');
+                    document.getElementById('aw-selection').style.display = 'block';
+                } else {
+                    awShowMsg(tt('AWIDO', 'MSG_INCOMPLETE'), '#b71c1c');
+                }
+                return;
+            }
+            awShowMsg('');
+            awLevel = resp.level;
+            awItems = Array.isArray(resp.items) ? resp.items : [];
+            document.getElementById('aw-level-label').textContent = tt('AWIDO', 'LEVEL_' + String(resp.level).toUpperCase());
+            var f = document.getElementById('aw-filter');
+            f.value = '';
+            group.style.display = 'block';
+            awRenderList();
+            f.focus();
+        })
+        .catch(function() { awShowMsg(tt('STATUS', 'MSG_CONNECTION_ERROR'), '#c62828'); });
+}
+
+function awRenderList() {
+    var el = document.getElementById('aw-results');
+    var q = hmFold(document.getElementById('aw-filter').value.trim());
+    var shown = awItems.filter(function(it) { return q === '' || hmFold(it.name).indexOf(q) !== -1; });
+    el.innerHTML = '';
+    if (shown.length === 0) {
+        el.innerHTML = '<div class="search-result-msg" style="color:#999;">' + tt('HAUSMUELL', 'MSG_NO_RESULTS') + '</div>';
+        return;
+    }
+    shown.forEach(function(it) {
+        var div = document.createElement('div');
+        div.className = 'search-result';
+        div.textContent = it.name;
+        div.onclick = function() { awPick(it); };
+        el.appendChild(div);
+    });
+}
+
+function awPick(item) {
+    if (!awState || !awLevel) return;
+    awState[awLevel] = { id: String(item.id), name: item.name };
+    awRenderTrail();
+    awStep();
+}
+
+function awSave() {
+    if (!awState) return;
+    var done = abfallioButtonBusy(document.getElementById('btn-aw-save'));
+    abfallioPostForm({ action: 'aw_save', state: JSON.stringify(awState) })
+        .then(function(resp) {
+            done(!!(resp && resp.success));
+            if (resp && resp.success) {
+                showAlert('tab-location', tt('HAUSMUELL', 'MSG_SAVED'), 'success');
+                setTimeout(function() {
+                    var u = new URL(window.location.href);
+                    u.searchParams.set('tab', 'status');
+                    u.searchParams.set('dofetch', '1');
+                    window.location.href = u.toString();
+                }, 800);
+            } else {
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
+            }
+        })
+        .catch(function() { done(false); showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
+}
+
+function awReset() {
+    if (!confirm(tt('HAUSMUELL', 'CONFIRM_RESET'))) return;
+    abfallioPostForm({ action: 'aw_reset' })
+        .then(function(resp) {
+            if (resp && resp.success) {
+                window.location.reload();
+            } else {
+                showAlert('tab-location', 'Error: ' + ((resp && resp.error) || 'Unknown'), 'error');
+            }
+        })
+        .catch(function() { showAlert('tab-location', tt('STATUS', 'MSG_CONNECTION_ERROR'), 'error'); });
+}
+
 (function providerAutoInit() {
     var pc = document.querySelector('.plugin-container');
     var at = (pc && pc.getAttribute('data-active-tab')) || 'status';
@@ -1545,6 +1767,7 @@ function mfReset() {
     if (at !== 'location' || !r) return;
     if (r.value === 'hausmuell') hmInit();
     if (r.value === 'muellabfuhr') mfInit();
+    if (r.value === 'awido') awInit();
 })();
 
 function refreshServiceMapList() {

@@ -217,7 +217,18 @@ export function parsePortalIcs(ics: string, locationName: string): MuellabfuhrPi
 
 /** Single-line title; "gelbe Tonne/Leichtverpackungen" → "gelbe Tonne - Leichtverpackungen" (shared parser drops "/"). */
 function icsEscape(s: string): string {
-  return s.replace(/[\r\n]+/g, " ").replace(/\s*\/\s*/g, " - ").replace(/\s{2,}/g, " ").trim();
+  return s
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s*\/\s*/g, " - ")
+    // The shared parser keeps only [A-Za-zäöüÄÖÜß0-9 -]: map what would otherwise vanish.
+    .replace(/[–—‐]/g, "-")
+    .replace(/[éèêë]/g, "e")
+    .replace(/[áàâ]/g, "a")
+    .replace(/[íìî]/g, "i")
+    .replace(/[óòô]/g, "o")
+    .replace(/[úùû]/g, "u")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /** Render pickups as a small all-day ICS so they run through the shared parser / cache / MQTT path. */

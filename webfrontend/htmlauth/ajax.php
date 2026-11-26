@@ -233,9 +233,46 @@ switch ($action) {
         json_response(['success' => true]);
         break;
 
+    /* ---- AWIDO (cubefour) upstream ---- */
+
+    case 'aw_customers':
+        $output = run_api($node, $api_script, ['aw_customers']);
+        echo $output ?: json_encode([]);
+        break;
+
+    case 'aw_step':
+        $state = (string) ($_POST['state'] ?? $_GET['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['error' => 'Missing or invalid state']);
+        }
+        $output = run_api($node, $api_script, ['aw_step', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['error' => 'No response from aw_step']);
+        break;
+
+    case 'aw_save':
+        $state = (string) ($_POST['state'] ?? '');
+        if ($state === '' || json_decode($state) === null) {
+            json_response(['success' => false, 'error' => 'Missing or invalid state']);
+        }
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $output = run_api($node, $api_script, ['aw_save', abfallio_arg_b64_utf8($state)]);
+        echo $output ?: json_encode(['success' => false, 'error' => 'No response from aw_save']);
+        break;
+
+    case 'aw_reset':
+        // Forget the address but keep the chosen customer.
+        $config_file = $plugin_config . '/abfall.json';
+        abfallio_ensure_plugin_config_dir($plugin_config);
+        $config = file_exists($config_file) ? (json_decode(file_get_contents($config_file), true) ?: []) : [];
+        $customer = (string) (($config['awido'] ?? [])['customer'] ?? '');
+        $config['awido'] = $customer !== '' ? ['customer' => $customer] : [];
+        file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        json_response(['success' => true]);
+        break;
+
     case 'set_provider':
         $provider = (string) ($_POST['provider'] ?? '');
-        if (!in_array($provider, ['abfallio', 'hausmuell', 'muellabfuhr'], true)) {
+        if (!in_array($provider, ['abfallio', 'hausmuell', 'muellabfuhr', 'awido'], true)) {
             json_response(['success' => false, 'error' => 'Unknown provider']);
         }
         abfallio_ensure_plugin_config_dir($plugin_config);

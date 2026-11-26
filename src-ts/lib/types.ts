@@ -60,13 +60,29 @@ export interface MuellabfuhrConfig {
   fraction_ids?: string[];
 }
 
+/** One chosen AWIDO node (place / street / house number, all UUIDs). */
+export interface AwidoPick {
+  id: string;
+  name: string;
+}
+
+/** Address on an AWIDO (cubefour) customer. */
+export interface AwidoConfig {
+  /** Customer key, e.g. "awhas" (Landkreis Haßberge). */
+  customer?: string;
+  place?: AwidoPick;
+  street?: AwidoPick;
+  hnr?: AwidoPick;
+}
+
 /** Which upstream delivers the schedule. Missing = `abfallio` (configs from before 1.6). */
-export type ProviderId = "abfallio" | "hausmuell" | "muellabfuhr";
+export type ProviderId = "abfallio" | "hausmuell" | "muellabfuhr" | "awido";
 
 export interface PluginConfig {
   provider?: ProviderId;
   hausmuell?: HausmuellConfig;
   muellabfuhr?: MuellabfuhrConfig;
+  awido?: AwidoConfig;
   service_key?: string;
   /**
    * Optional https URL: JSON array of { title, url, service_id } or the upstream
