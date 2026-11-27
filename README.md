@@ -232,19 +232,31 @@ In *Einstellungen* / *Settings*:
 - **Fetch interval (hours)** — default **6** (UI or local `config/abfall.json` in a git checkout). Release ZIP **does not** ship `config/abfall.json` so upgrades do not overwrite `$LBHOMEDIR/config/plugins/abfallio/abfall.json`. LoxBerry **rebuilds plugin trees on upgrade**; **`preupgrade.sh` / `postupgrade.sh`** back up and restore `config/plugins/...` and `data/plugins/...`.
 - **Fuzz (± minutes)** — default ±30; set `0` to disable.
 
-Cron runs hourly at :17; `fetch.cjs` skips until interval + fuzz allow the next run.
+Cron runs hourly at :17; `fetch.cjs` skips the upstream until interval + fuzz allow the next run. In between, it recomputes `days` from the cached dates (no upstream request), so values flip correctly after midnight and expired dates disappear. After a failed fetch it retries after 1 h, 2 h, 4 h … (capped at the interval) and keeps serving the cached dates. If the upstream answers without any upcoming dates (end of year, next year not published yet), the status is `no_future_dates`, which is not an error.
 
 ### 3) MQTT publishing (optional)
 
-Toggle publish-after-fetch; auto-detect LoxBerry broker or set host/port/user. After each successful fetch (retained, QoS 1), topics include:
+Toggle publish-after-fetch; auto-detect LoxBerry broker or set host/port/user. Topics are published (retained, QoS 1) after each fetch, after a failed fetch, and whenever the hourly recompute changes a value:
 
 ```text
-<prefix>/state
-<prefix>/last_fetch
+<prefix>/state                 full data set (JSON)
+<prefix>/last_fetch            last successful fetch (text)
 <prefix>/location
 <prefix>/categories_count
+<prefix>/status                ok | no_future_dates | error
+<prefix>/ok                    1 / 0 (0 = last fetch failed; cached dates are still published)
+<prefix>/last_success_unix     Unix seconds of the last successful fetch (watchdog)
+<prefix>/today                 categories collected today, comma-separated ("-" = none)
+<prefix>/today_any             1 / 0
+<prefix>/tomorrow              categories collected tomorrow, comma-separated ("-" = none)
+<prefix>/tomorrow_any          1 / 0
+<prefix>/next_days             smallest days value over all categories (-1 = none)
 <prefix>/categories/<slug>/days|date|weekday|weekday_num|category
+<prefix>/categories/<slug>/date_unix   local midnight of the date, Unix seconds
+<prefix>/categories/<slug>/date_lox    same in Loxone time (seconds since 2009-01-01, local)
 ```
+
+"-" is used instead of an empty payload because an empty retained message deletes the topic. Topics of categories that disappear (expired, filtered out) are removed from the broker.
 
 Default prefix `loxberry/abfallio`. Umlauts in category names fold to ASCII (`Grünabfall` → `gruenabfall`).
 

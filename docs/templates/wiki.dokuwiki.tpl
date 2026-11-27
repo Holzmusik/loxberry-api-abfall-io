@@ -104,7 +104,21 @@ Aktueller Stand: **{{SUPPORTED_REGION_COUNT}} Regionen** (Quelle: ''data/abfalli
 
   * %%loxberry/abfallio/categories_count%% — Anzahl der Kategorien
 
-  * Pro Abfallart: unter %%loxberry/abfallio/categories/<Kurzname>/…%% die Felder **days**, **date**, **weekday**, **weekday_num**, **category**. Der **Kurzname** wird aus dem Anzeigenamen abgeleitet (ASCII‑sichere Darstellung für Topic‑Segmente).
+  * %%loxberry/abfallio/status%% — **ok**, **no_future_dates** (Anbieter erreichbar, aber noch keine neuen Termine, z. B. zum Jahresende) oder **error**
+
+  * %%loxberry/abfallio/ok%% — **1** / **0** (0 = letzter Abruf fehlgeschlagen; die zwischengespeicherten Termine werden trotzdem weiter aktualisiert)
+
+  * %%loxberry/abfallio/last_success_unix%% — letzter erfolgreicher Abruf als Zahl (Unix‑Sekunden), z. B. für einen Watchdog in Loxone
+
+  * %%loxberry/abfallio/today%% / %%loxberry/abfallio/tomorrow%% — Abfallarten von heute bzw. morgen, kommagetrennt (**-** = keine)
+
+  * %%loxberry/abfallio/today_any%% / %%loxberry/abfallio/tomorrow_any%% — **1** / **0**
+
+  * %%loxberry/abfallio/next_days%% — kleinster **days**‑Wert über alle Abfallarten (**-1** = keine)
+
+  * Pro Abfallart: unter %%loxberry/abfallio/categories/<Kurzname>/…%% die Felder **days**, **date**, **weekday**, **weekday_num**, **category**, **date_unix** (Unix‑Sekunden, lokale Mitternacht) und **date_lox** (Loxone‑Zeit: Sekunden seit 1.1.2009, lokal). Der **Kurzname** wird aus dem Anzeigenamen abgeleitet (ASCII‑sichere Darstellung für Topic‑Segmente). Topics von Abfallarten, die wegfallen, werden vom Broker entfernt.
+
+  * **days** wird stündlich aus den gespeicherten Terminen neu berechnet (ohne Abruf beim Anbieter) und stimmt daher auch direkt nach Mitternacht.
 
 **(3)** Test‑Abonnement aller Untertopics eines Präfixes (MQTT‑Client):
 

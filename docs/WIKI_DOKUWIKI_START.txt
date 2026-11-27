@@ -111,28 +111,46 @@ Bei Problemen zuerst den Tab **Log** auswerten (Fehlermeldungen des Plugins, Net
 
 ===== Unterstützte Regionen (aus Service-Map) =====
 
-Aktueller Stand: **31 Regionen** (Quelle: ''data/abfallio-service-map.json'').
+Aktueller Stand: **52 Regionen** (Quelle: ''data/abfallio-service-map.json'').
 
   * [[https://www.goa-online.de/|Abfallbewirtschaftung Ostalbkreis]] (Service-ID: ''3ca331fb42d25e25f95014693ebcf855'')
+  * [[https://www.awb-bb.de/|Abfallwirtschaft Landkreis Böblingen]] (Service-ID: ''76bdaac8568082d77e7a90cb41129f9b'')
   * [[https://www.awb-fds.de/|Abfallwirtschaft Landkreis Freudenstadt]] (Service-ID: ''595f903540a36fe8610ec39aa3a06f6a'')
   * [[https://www.abfallwelt.de/|Abfallwirtschaft Landkreis Kitzingen]] (Service-ID: ''594f805eb33677ad5bc645aeeeaf2623'')
   * [[https://www.abfallberatung-landsberg.de/|Abfallwirtschaft Landkreis Landsberg am Lech]] (Service-ID: ''7df877d4f0e63decfb4d11686c54c5d6'')
+  * [[https://abfall-nr.de/|Abfallwirtschaft Landkreis Neuwied]] (Service-ID: ''de4957b006c53e47f8b9c21bc2c768f0'')
   * [[https://www.azv-rme.de/|Abfallzweckverband Rhein-Mosel-Eifel (Landkreis Mayen-Koblenz)]] (Service-ID: ''8303df78b822c30ff2c2f98e405f86e6'')
   * [[https://berlin.alba.info/|ALBA Berlin]] (Service-ID: ''9583a2fa1df97ed95363382c73b41b1b'')
-  * [[https://www.asg-nordsachsen.de/|ASG Nordsachsen]] (Service-ID: ''1d78841c5d7fc43ebe52b9dc01f6b962'')
-  * [[https://www.aso-ohz.de/|ASO Abfall-Service Osterholz]] (Service-ID: ''040b38fe83f026f161f30f282b2748c0'')
+  * [[https://www.landkreis-prignitz.de/|Amt Bad Wilsnack/Weisen (Landkreis Prignitz)]] (Service-ID: ''1e9592418582666e2a5d1c62b2683435'')
+  * [[https://www.lrasbk.de/|Amt für Abfallwirtschaft Schwarzwald-Baar-Kreis]] (Service-ID: ''30628292bdd8b43db86a48f7e0d85f85'')
+  * [[https://www.landkreis-prignitz.de/|Amt Lenzen-Elbtalaue (Landkreis Prignitz)]] (Service-ID: ''bb937857acd951dfc8de5be8b8a49f6d'')
+  * [[https://www.landkreis-prignitz.de/|Amt Meyenburg (Landkreis Prignitz)]] (Service-ID: ''4638881e7bebe6869e2e86de5f8aa09e'')
+  * [[https://www.landkreis-prignitz.de/|Amt Putlitz/Berge (Landkreis Prignitz)]] (Service-ID: ''4f06df48f154246415e57ce12b26abe5'')
+  * [[https://www.asg-nordsachsen.de/|ASG Nordsachsen]] (Service-ID: ''2085afd95285e645e15ee9623d0c5172'')
+  * [[https://www.aso-ohz.de/|ASO Abfall-Service Osterholz]] (Service-ID: ''8b016df0116d1d5094fa339bebea0c65'')
   * [[https://www.avr-kommunal.de/|AVR Kommunal, Rhein-Neckar-Kreis]] (Service-ID: ''914fb9d000a9a05af4fd54cfba478860'')
   * [[https://wab.rlp.de/|AWB Westerwaldkreis]] (Service-ID: ''248deacbb49b06e868d29cb53c8ef034'')
+  * [[https://www.awg-info.de/|AWG Abfallwirtschaft Landkreis Calw]] (Service-ID: ''0813ea99f520c462373386564a99a51e'')
   * [[https://www.egst.de/|EGST Steinfurt]] (Service-ID: ''e21758b9c711463552fb9c70ac7d4273'')
-  * [[https://www.ebe-essen.de/|Entsorgungsbetriebe Essen]] (Service-ID: ''9b5390f095c779b9128a51db35092c9c'')
+  * [[https://www.ebe-essen.de/|Entsorgungsbetriebe Essen]] (Service-ID: ''51be67f3758f1fb57b420efe065c0663'')
+  * [[https://www.landkreis-prignitz.de/|Gemeinde Groß Pankow (Landkreis Prignitz)]] (Service-ID: ''af91b65d2753a219309072837d8ea4e1'')
+  * [[https://www.landkreis-prignitz.de/|Gemeinde Gumtow (Landkreis Prignitz)]] (Service-ID: ''3cefa45ab357d231891bb497253c630f'')
+  * [[https://www.landkreis-prignitz.de/|Gemeinde Karstädt (Landkreis Prignitz)]] (Service-ID: ''798f59a75627f5d7686dab0c7226c877'')
+  * [[https://www.landkreis-prignitz.de/|Gemeinde Plattenburg (Landkreis Prignitz)]] (Service-ID: ''a0461612534502273c518e28d4f6f1e4'')
   * [[https://www.geb-goettingen.de/|Göttinger Entsorgungsbetriebe]] (Service-ID: ''7dd0d724cbbd008f597d18fcb1f474cb'')
+  * [[https://www.holding-graz.at/|Holding Graz]] (Service-ID: ''1c230a689579b6d3ddb9ceb5a56c6072'')
+  * [[https://kell-gmbh.de/|KELL Kommunalentsorgung Landkreis Leipzig GmbH]] (Service-ID: ''0d7a92192ba3ae914c028ac37d73e222'')
   * [[https://www.landkreis-bayreuth.de/|Landkreis Bayreuth]] (Service-ID: ''951da001077dc651a3bf437bc829964e'')
   * [[https://www.kreis-calw.de/|Landkreis Calw]] (Service-ID: ''690a3ae4906c52b232c1322e2f88550c'')
   * [[https://www.landkreis-cuxhaven.de/|Landkreis Cuxhaven]] (Service-ID: ''49fe8a63a056adbfc43f051f61dd4a44'')
+  * [[https://www.landkreisgoettingen.de/|Landkreis Göttingen]] (Service-ID: ''4b5702d771c82b611c386ebbc7629026'')
   * [[https://www.landkreis-heilbronn.de/|Landkreis Heilbronn]] (Service-ID: ''1a1e7b200165683738adddc4bd0199a2'')
+  * [[https://www.landkreis-landshut.de/|Landkreis Landshut]] (Service-ID: ''04b7561b94f2cbaa171cd85bb6aa56de'')
   * [[https://www.awb-lm.de/|Landkreis Limburg-Weilburg]] (Service-ID: ''0ff491ffdf614d6f34870659c0c8d917'')
+  * [[https://www.maerkisch-oderland.de/|Landkreis Märkisch-Oderland]] (Service-ID: ''efb75cbd1f08fae1d4e47ae72a85c655'')
   * [[https://www.oldenburg-kreis.de/|Landkreis Oldenburg]] (Service-ID: ''27708a019a2e35de7eb4bbe7c851609f'')
   * [[https://www.buerger-ostallgaeu.de/|Landkreis Ostallgäu]] (Service-ID: ''342cedd68ca114560ed4ca4b7c4e5ab6'')
+  * [[https://www.kreis-reutlingen.de/|Landkreis Reutlingen]] (Service-ID: ''15f69fab91c4cae50d9dbb5bcfd383f0'')
   * [[https://lk-awr.de/|Landkreis Rotenburg (Wümme)]] (Service-ID: ''645adb3c27370a61f7eabbb2039de4f1'')
   * [[https://landkreis-rottweil.de|Landkreis Rottweil]] (Service-ID: ''d287412901d68d66825e588a60c94641'')
   * [[https://www.landkreis-sigmaringen.de/|Landkreis Sigmaringen]] (Service-ID: ''39886c5699d14e040063c0142cd0740b'')
@@ -142,8 +160,11 @@ Aktueller Stand: **31 Regionen** (Quelle: ''data/abfallio-service-map.json'').
   * [[https://www.ludwigshafen.de/|Ludwigshafen am Rhein]] (Service-ID: ''6efba91e69a5b454ac0ae3497978fe1d'')
   * [[https://www.schoenmackers.de/|MüllALARM / Schönmackers]] (Service-ID: ''e5543a3e190cb8d91c645660ad60965f'')
   * [[https://www.landshut.de/|Stadt Landshut]] (Service-ID: ''bd0c2d0177a0849a905cded5cb734a6f'')
-  * [[https://www.team-orange.info/|Team Orange (Landkreis Würzburg)]] (Service-ID: ''3701fd1ff111f63996ab46a448669ea3'')
+  * [[https://www.landkreis-prignitz.de/|Stadt Perleberg (Landkreis Prignitz)]] (Service-ID: ''9fb3e2e5498e825250105ee272102a7b'')
+  * [[https://www.landkreis-prignitz.de/|Stadt Pritzwalk (Landkreis Prignitz)]] (Service-ID: ''d92f59ef4066ae6d299478996d1d8430'')
+  * [[https://www.landkreis-prignitz.de/|Stadt Wittenberge (Landkreis Prignitz)]] (Service-ID: ''b870ecfa6e1f882680758d374ba3fa2d'')
   * [[https://www.vivowarngau.de/|VIVO Landkreis Miesbach]] (Service-ID: ''4e33d4f09348fdcc924341bf2f27ec86'')
+  * [[https://www.wb-duisburg.de/|Wirtschaftsbetriebe Duisburg (WBD)]] (Service-ID: ''80acad6c77fe9342ebafad29a8c58bf6'')
 
 ===== Screenshots (deutsche Oberfläche) =====
 
@@ -171,7 +192,21 @@ Aktueller Stand: **31 Regionen** (Quelle: ''data/abfallio-service-map.json'').
 
   * %%loxberry/abfallio/categories_count%% — Anzahl der Kategorien
 
-  * Pro Abfallart: unter %%loxberry/abfallio/categories/<Kurzname>/…%% die Felder **days**, **date**, **weekday**, **weekday_num**, **category**. Der **Kurzname** wird aus dem Anzeigenamen abgeleitet (ASCII‑sichere Darstellung für Topic‑Segmente).
+  * %%loxberry/abfallio/status%% — **ok**, **no_future_dates** (Anbieter erreichbar, aber noch keine neuen Termine, z. B. zum Jahresende) oder **error**
+
+  * %%loxberry/abfallio/ok%% — **1** / **0** (0 = letzter Abruf fehlgeschlagen; die zwischengespeicherten Termine werden trotzdem weiter aktualisiert)
+
+  * %%loxberry/abfallio/last_success_unix%% — letzter erfolgreicher Abruf als Zahl (Unix‑Sekunden), z. B. für einen Watchdog in Loxone
+
+  * %%loxberry/abfallio/today%% / %%loxberry/abfallio/tomorrow%% — Abfallarten von heute bzw. morgen, kommagetrennt (**-** = keine)
+
+  * %%loxberry/abfallio/today_any%% / %%loxberry/abfallio/tomorrow_any%% — **1** / **0**
+
+  * %%loxberry/abfallio/next_days%% — kleinster **days**‑Wert über alle Abfallarten (**-1** = keine)
+
+  * Pro Abfallart: unter %%loxberry/abfallio/categories/<Kurzname>/…%% die Felder **days**, **date**, **weekday**, **weekday_num**, **category**, **date_unix** (Unix‑Sekunden, lokale Mitternacht) und **date_lox** (Loxone‑Zeit: Sekunden seit 1.1.2009, lokal). Der **Kurzname** wird aus dem Anzeigenamen abgeleitet (ASCII‑sichere Darstellung für Topic‑Segmente). Topics von Abfallarten, die wegfallen, werden vom Broker entfernt.
+
+  * **days** wird stündlich aus den gespeicherten Terminen neu berechnet (ohne Abruf beim Anbieter) und stimmt daher auch direkt nach Mitternacht.
 
 **(3)** Test‑Abonnement aller Untertopics eines Präfixes (MQTT‑Client):
 
