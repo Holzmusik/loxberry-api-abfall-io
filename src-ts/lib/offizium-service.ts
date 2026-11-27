@@ -10,6 +10,7 @@
  * (~2.8 MB, dates up to the end of the next year). "special" types other than hazardous-waste collections
  * are recycling-centre opening hours and are skipped.
  */
+import { NoCollectionDatesError } from "./errors.js";
 import { log } from "./logger.js";
 import { pickupsToIcs, type MuellabfuhrPickup } from "./muellabfuhr-service.js";
 import type { OffiziumConfig, OffiziumPick } from "./types.js";
@@ -189,7 +190,7 @@ export async function fetchOffizium(cfg: OffiziumConfig, load = loadWebshow): Pr
   const pickups = pickupsFor(data, cfg.city!.id, cfg.area!.id);
   log.info(`offizium ${inst.id} ${offiziumLocationLabel(cfg)}: ${pickups.length} pickups`);
   if (pickups.length === 0) {
-    throw new Error("offizium returned no collection dates for this address.");
+    throw new NoCollectionDatesError("offizium returned no collection dates for this address.");
   }
   return { ics: pickupsToIcs(pickups), count: pickups.length };
 }

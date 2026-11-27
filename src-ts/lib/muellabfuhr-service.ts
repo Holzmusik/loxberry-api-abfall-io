@@ -12,6 +12,7 @@
  * The location tree is Ort → (Ortsteil) → (Straße); every node says whether it is final.
  * The district list is read live from the portal, so newly added districts appear automatically.
  */
+import { NoCollectionDatesError } from "./errors.js";
 import { log } from "./logger.js";
 import type { MuellabfuhrConfig, MuellabfuhrPick } from "./types.js";
 
@@ -296,7 +297,7 @@ export async function fetchMuellabfuhr(
   }
 
   if (pickups.length === 0) {
-    throw new Error("muellabfuhr-deutschland.de returned no collection dates for this address.");
+    throw new NoCollectionDatesError("muellabfuhr-deutschland.de returned no collection dates for this address.");
   }
   return { ics: pickupsToIcs(pickups), config: { ...cfg, fraction_ids: fractionIds }, count: pickups.length };
 }

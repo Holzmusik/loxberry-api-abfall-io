@@ -131,6 +131,8 @@ function parseIniSection(text: string, section: string): Record<string, string> 
 export interface MqttPublishOptions {
   config: MqttConfig;
   data: WasteData;
+  /** Category slugs published last time; topics of slugs no longer present are cleared. */
+  previousSlugs?: string[];
   lbhomedir?: string;
   /**
    * Allows tests to inject a fake mqtt connection. Must accept the resolved options
@@ -170,32 +172,118 @@ export function safeTopicSegment(value: string): string {
   return stripped !== "" ? stripped.toLowerCase() : "unknown";
 }
 
+/** Payload for "nothing" in list topics: an empty retained payload would delete the topic on the broker. */
+export const NONE_PAYLOAD = "-";
+
+/** Seconds between 1970-01-01 and 2009-01-01 (Loxone time base). */
+const LOXONE_EPOCH_OFFSET_S = 1_230_768_000;
+
+/** Sub-topics published per category (also cleared when a category disappears). */
+export const CATEGORY_SUBTOPICS = [
+  "days",
+  "date",
+  "weekday",
+  "weekday_num",
+  "category",
+  "date_unix",
+  "date_lox",
+] as const;
+
+/** `DD.MM.YYYY` → [year, monthIndex, day], or null. */
+function splitDatum(datum: string): [number, number, number] | null {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(datum);
+  return m ? [Number(m[3]), Number(m[2]) - 1, Number(m[1])] : null;
+}
+
+/** Unix seconds of local midnight of `datum`. */
+export function datumToUnix(datum: string): number | null {
+  const p = splitDatum(datum);
+  return p ? Math.floor(new Date(p[0], p[1], p[2]).getTime() / 1000) : null;
+}
+
+/**
+ * Loxone time of local midnight of `datum`: seconds since 2009-01-01 00:00 in *local* time
+ * (Loxone does not count in UTC), so a virtual input can show it directly as a date.
+ */
+export function datumToLoxone(datum: string): number | null {
+  const p = splitDatum(datum);
+  return p ? Date.UTC(p[0], p[1], p[2]) / 1000 - LOXONE_EPOCH_OFFSET_S : null;
+}
+
+/** Unix seconds of the last successful fetch (older caches: parsed from `timestamp`). */
+function lastSuccessUnix(data: WasteData): number {
+  if (typeof data.last_success_unix === "number") return data.last_success_unix;
+  const t = new Date((data.timestamp ?? "").replace(" ", "T")).getTime();
+  return Number.isFinite(t) ? Math.floor(t / 1000) : 0;
+}
+
+/** Category slugs (topic segments) of a data set. */
+export function categorySlugs(data: WasteData): string[] {
+  return [...new Set(Object.keys(data.termine).map((n) => safeTopicSegment(n)))];
+}
+
 export function buildPublishMessages(
   prefix: string,
   data: WasteData,
 ): { topic: string; payload: string }[] {
   const safePrefix = prefix.replace(/\/+$/g, "");
   const messages: { topic: string; payload: string }[] = [];
-  messages.push({ topic: `${safePrefix}/state`, payload: JSON.stringify(data) });
-  messages.push({ topic: `${safePrefix}/last_fetch`, payload: data.timestamp });
-  messages.push({ topic: `${safePrefix}/location`, payload: data.location });
-  messages.push({
-    topic: `${safePrefix}/categories_count`,
-    payload: String(Object.keys(data.termine).length),
-  });
-  for (const [name, entry] of Object.entries(data.termine)) {
-    const slug = safeTopicSegment(name);
-    const base = `${safePrefix}/categories/${slug}`;
-    messages.push({ topic: `${base}/days`, payload: String(entry.tage) });
-    messages.push({ topic: `${base}/date`, payload: entry.datum });
-    messages.push({ topic: `${base}/weekday`, payload: entry.wochentag });
-    messages.push({
-      topic: `${base}/weekday_num`,
-      payload: String(entry.wochentag_num ?? 0),
-    });
-    messages.push({ topic: `${base}/category`, payload: name });
+  const push = (topic: string, payload: string): void => {
+    messages.push({ topic: `${safePrefix}/${topic}`, payload });
+  };
+  // `state` mirrors the cache without internal bookkeeping (date lists, MQTT status).
+  const { upcoming: _upcoming, mqtt: _mqtt, ...state } = data;
+  push("state", JSON.stringify(state));
+  push("last_fetch", data.timestamp);
+  push("location", data.location);
+  push("categories_count", String(Object.keys(data.termine).length));
+
+  const status = data.status ?? "ok";
+  const entries = Object.entries(data.termine);
+  const namesIn = (days: number): string[] => entries.filter(([, e]) => e.tage === days).map(([n]) => n);
+  const today = namesIn(0);
+  const tomorrow = namesIn(1);
+  push("status", status);
+  push("ok", status === "error" ? "0" : "1");
+  push("last_success_unix", String(lastSuccessUnix(data)));
+  push("today", today.length > 0 ? today.join(", ") : NONE_PAYLOAD);
+  push("today_any", today.length > 0 ? "1" : "0");
+  push("tomorrow", tomorrow.length > 0 ? tomorrow.join(", ") : NONE_PAYLOAD);
+  push("tomorrow_any", tomorrow.length > 0 ? "1" : "0");
+  push("next_days", entries.length > 0 ? String(Math.min(...entries.map(([, e]) => e.tage))) : "-1");
+
+  for (const [name, entry] of entries) {
+    const base = `categories/${safeTopicSegment(name)}`;
+    push(`${base}/days`, String(entry.tage));
+    push(`${base}/date`, entry.datum);
+    push(`${base}/weekday`, entry.wochentag);
+    push(`${base}/weekday_num`, String(entry.wochentag_num ?? 0));
+    push(`${base}/category`, name);
+    push(`${base}/date_unix`, String(datumToUnix(entry.datum) ?? 0));
+    push(`${base}/date_lox`, String(datumToLoxone(entry.datum) ?? 0));
   }
   return messages;
+}
+
+/**
+ * Empty retained payloads for every sub-topic of categories that were published before but are
+ * gone now (expired, filtered out, end of year) – removes them from the broker.
+ */
+export function buildClearMessages(
+  prefix: string,
+  previousSlugs: string[],
+  currentSlugs: string[],
+): { topic: string; payload: string }[] {
+  const safePrefix = prefix.replace(/\/+$/g, "");
+  const keep = new Set(currentSlugs);
+  const out: { topic: string; payload: string }[] = [];
+  for (const slug of new Set(previousSlugs)) {
+    if (keep.has(slug)) continue;
+    for (const sub of CATEGORY_SUBTOPICS) {
+      out.push({ topic: `${safePrefix}/categories/${slug}/${sub}`, payload: "" });
+    }
+  }
+  return out;
 }
 
 export async function publishWasteData(
@@ -227,7 +315,12 @@ export async function publishWasteData(
   if (!Number.isFinite(port) || port <= 0) port = 1883;
 
   const prefix = config.topic_prefix?.trim() || DEFAULT_PREFIX;
-  const messages = buildPublishMessages(prefix, data);
+  const retain = config.retain !== false;
+  const currentSlugs = categorySlugs(data);
+  const previousSlugs = options.previousSlugs ?? [];
+  // Clearing only makes sense for retained topics (non-retained ones are not stored anyway).
+  const clears = retain ? buildClearMessages(prefix, previousSlugs, currentSlugs) : [];
+  const messages = [...buildPublishMessages(prefix, data), ...clears];
 
   const clientId = `abfallio_${Math.random().toString(16).slice(2, 10)}`;
   const connect = options.connect ?? defaultConnect;
@@ -237,18 +330,21 @@ export async function publishWasteData(
     client = await connect({ host, port, user, password, clientId });
     for (const msg of messages) {
       await client.publish(msg.topic, msg.payload, {
-        retain: config.retain !== false,
+        retain,
         qos: 1,
       });
     }
+    const cleared = clears.length / CATEGORY_SUBTOPICS.length;
     log.info(
-      `MQTT published ${messages.length} topics to ${broker} (prefix='${prefix}', source=${source})`,
+      `MQTT published ${messages.length - clears.length} topics to ${broker} (prefix='${prefix}', source=${source})` +
+        (cleared > 0 ? `, cleared ${cleared} stale categories` : ""),
     );
     return {
       ok: true,
       last: nowTs(),
       topics_published: messages.length,
       broker,
+      category_slugs: currentSlugs,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -258,6 +354,8 @@ export async function publishWasteData(
       last: nowTs(),
       message,
       broker,
+      // Not sure what reached the broker: remember both so the next publish clears leftovers.
+      category_slugs: [...new Set([...previousSlugs, ...currentSlugs])],
     };
   } finally {
     if (client) {

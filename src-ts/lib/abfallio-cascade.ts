@@ -13,6 +13,7 @@
  * The admin UI walks the levels with {@link nextStep}; the state is stateless on the server side and every
  * step replays the previous ones (a handful of small requests, only while the user clicks through).
  */
+import { NoCollectionDatesError } from "./errors.js";
 import { log } from "./logger.js";
 import { pickupsToIcs, type MuellabfuhrPickup } from "./muellabfuhr-service.js";
 
@@ -270,7 +271,7 @@ export async function v3FetchIcs(key: string, houseId: string, now = new Date())
   }));
   log.info(`abfall.io v3: ${pickups.length} appointments for idHouseNumber ${houseId}`);
   if (pickups.length === 0) {
-    throw new Error("abfall.io returned no collection dates for this address.");
+    throw new NoCollectionDatesError("abfall.io returned no collection dates for this address.");
   }
   return pickupsToIcs(pickups);
 }

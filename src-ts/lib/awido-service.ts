@@ -10,6 +10,7 @@
  * The calendar already spans the current and the next year. Entries with `ad: null` are public holidays.
  * Fallback for customers without JSON: …/Customer/<c>/KalenderICS.aspx?oid=…&jahr=…
  */
+import { NoCollectionDatesError } from "./errors.js";
 import { log } from "./logger.js";
 import { pickupsToIcs, type MuellabfuhrPickup } from "./muellabfuhr-service.js";
 import type { AwidoConfig, AwidoPick } from "./types.js";
@@ -266,7 +267,7 @@ export async function fetchAwido(cfg: AwidoConfig, now = new Date()): Promise<{ 
   const count = (ics.match(/BEGIN:VEVENT/g) ?? []).length;
   log.info(`AWIDO ${c}: ${count} events (ICS)`);
   if (count === 0) {
-    throw new Error("AWIDO returned no collection dates for this address.");
+    throw new NoCollectionDatesError("AWIDO returned no collection dates for this address.");
   }
   return { ics, count };
 }

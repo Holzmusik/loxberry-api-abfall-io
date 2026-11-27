@@ -10,6 +10,7 @@
  * `onClick='get_value("<level>", <id>[, <egebiet>])'` handler rather than fixed span
  * positions (same approach as the Home Assistant `hausmuell_info` source).
  */
+import { NoCollectionDatesError } from "./errors.js";
 import { foldForSearch } from "./fold-for-search.js";
 import { log } from "./logger.js";
 import type { HausmuellConfig, HausmuellPick } from "./types.js";
@@ -480,27 +481,59 @@ export async function fetchHausmuellIcs(cfg: HausmuellConfig, now = new Date()):
         parts.push(text);
         log.info(`hausmuell.info ${sub}: ${countEvents(text)} events for ${year}`);
       } else if (text.includes(ICS_ERROR_MARKER)) {
-        throw new Error("hausmuell.info rejected the address (\"Bitte geben Sie Ihre Daten korrekt an\").");
+        throw new HausmuellAddressError();
       }
     }
     return parts.join("\n");
   };
 
+  // Network / HTTP errors propagate unchanged: re-resolving the address cannot fix them and
+  // would only add search requests on every retry.
   let ics = "";
+  let addressRejected = false;
   try {
     ics = await download(working);
   } catch (err) {
-    log.warn(`hausmuell.info export with saved ids failed (${String(err)}); re-resolving address by name`);
+    if (!(err instanceof HausmuellAddressError)) throw err;
+    addressRejected = true;
+    log.warn("hausmuell.info rejected the saved ids; re-resolving address by name");
   }
   if (countEvents(ics) === 0) {
-    working = await reresolveByNames(working);
-    working.zusatz_id = "";
+    // Either the ids were rejected, or the calendar is empty. Ids can change when a portal
+    // re-imports its data (turn of the year), so look the names up again; this throws a real
+    // address error when a name is gone.
+    const resolved = await reresolveByNames(working);
+    if (!addressRejected && sameHausmuellIds(resolved, working)) {
+      throw new NoCollectionDatesError(
+        "hausmuell.info returned no collection dates for this address (next year probably not published yet).",
+      );
+    }
+    working = { ...resolved, zusatz_id: "" };
     ics = await download(working);
   }
   if (countEvents(ics) === 0) {
-    throw new Error("hausmuell.info returned no collection dates for this address.");
+    throw new NoCollectionDatesError("hausmuell.info returned no collection dates for this address.");
   }
   return { ics: normalizeHausmuellIcs(ics), config: working };
+}
+
+/** Portal answered with its "Bitte geben Sie Ihre Daten korrekt an" form: the ids are not valid. */
+class HausmuellAddressError extends Error {
+  constructor() {
+    super("hausmuell.info rejected the address (\"Bitte geben Sie Ihre Daten korrekt an\").");
+    this.name = "HausmuellAddressError";
+  }
+}
+
+/** Same address ids (the values the ICS export is selected by)? */
+export function sameHausmuellIds(a: HausmuellConfig, b: HausmuellConfig): boolean {
+  return (
+    (a.egebiet ?? "") === (b.egebiet ?? "") &&
+    (a.ort?.id ?? "") === (b.ort?.id ?? "") &&
+    (a.ortsteil?.id ?? "") === (b.ortsteil?.id ?? "") &&
+    (a.strasse?.id ?? "") === (b.strasse?.id ?? "") &&
+    (a.hnr?.id ?? "") === (b.hnr?.id ?? "")
+  );
 }
 
 export function hausmuellLocationLabel(cfg: HausmuellConfig | undefined): string {

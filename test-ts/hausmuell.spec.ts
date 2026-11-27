@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { activeProvider, isLocationComplete, parseIcs, parseIcsDate } from "../src-ts/lib/abfall-service.js";
 import {
   decodeBody,
+  fetchHausmuellIcs,
   extractPortalDefaults,
   hausmuellLocationLabel,
   isHausmuellAddressComplete,
@@ -12,6 +13,8 @@ import {
   repairDoubleUtf8,
   sanitizeHausmuellState,
 } from "../src-ts/lib/hausmuell-service.js";
+import { NoCollectionDatesError } from "../src-ts/lib/errors.js";
+import type { HausmuellConfig } from "../src-ts/lib/types.js";
 
 /* Response shapes as served by the three ATURIS frontend generations (trimmed). */
 const OLD_ORTE =
@@ -219,5 +222,81 @@ describe("hausmuell.info cascade (nextStep, stubbed HTTP)", () => {
     routes = { "search_strassen.php": { body: NO_ENTRY } };
     const s = await nextStep({ subdomain: "ew", ort: { id: "1", name: "X" }, ort_has_ortsteile: false });
     expect(s).to.deep.equal({ done: true, complete: false });
+  });
+});
+
+describe("hausmuell.info ICS download (year end, stubbed HTTP)", () => {
+  const realFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let icsBody = "";
+  let icsStatus = 200;
+  let strassen = "<ul><li onClick='get_value(\"str\",230665,18948)'><span>Am Anger</span></li></ul>";
+  const cfg: HausmuellConfig = {
+    subdomain: "ew",
+    ort: { id: "16702", name: "Arenshausen" },
+    strasse: { id: "230665", name: "Am Anger" },
+    egebiet: "18948",
+    zusatz_id: "1",
+  };
+  const EVENT = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20270108\nSUMMARY:Restabfall\nEND:VEVENT\nEND:VCALENDAR";
+
+  beforeEach(() => {
+    calls.length = 0;
+    icsStatus = 200;
+    strassen = "<ul><li onClick='get_value(\"str\",230665,18948)'><span>Am Anger</span></li></ul>";
+    globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("ics/ics.php")) {
+        const body = String(init?.body ?? "");
+        // Ids changed by the portal: only the new egebiet returns dates.
+        const text = body.includes("hidden_id_egebiet=777") ? EVENT : icsBody;
+        return new Response(text, { status: icsStatus });
+      }
+      if (url.includes("search_orte.php")) {
+        return new Response("<ul><li onClick='get_value(\"ort\",16702,0)'><span>Arenshausen</span></li></ul>");
+      }
+      if (url.includes("search_strassen.php")) return new Response(strassen);
+      if (url.includes("search/")) return new Response("", { status: 404 });
+      return new Response("<html></html>");
+    }) as typeof fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it("empty calendar with unchanged ids → NoCollectionDatesError (not a fetch error)", async () => {
+    icsBody = "BEGIN:VCALENDAR\nEND:VCALENDAR";
+    let err: unknown;
+    try {
+      await fetchHausmuellIcs(cfg, new Date(2026, 11, 28));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).to.be.instanceOf(NoCollectionDatesError);
+    // one name lookup, no second download
+    expect(calls.filter((u) => u.includes("ics/ics.php"))).to.have.length(2);
+  });
+
+  it("empty calendar but ids changed (portal re-import) → downloads again with the new ids", async () => {
+    icsBody = "BEGIN:VCALENDAR\nEND:VCALENDAR";
+    strassen = "<ul><li onClick='get_value(\"str\",999,777)'><span>Am Anger</span></li></ul>";
+    const { config, ics } = await fetchHausmuellIcs(cfg, new Date(2026, 11, 28));
+    expect(config.egebiet).to.equal("777");
+    expect(ics).to.include("Restabfall");
+  });
+
+  it("HTTP errors propagate without re-resolving the address", async () => {
+    icsStatus = 503;
+    icsBody = "";
+    let err: unknown;
+    try {
+      await fetchHausmuellIcs(cfg, new Date(2026, 11, 28));
+    } catch (e) {
+      err = e;
+    }
+    expect(String(err)).to.match(/status 503/);
+    expect(err).to.not.be.instanceOf(NoCollectionDatesError);
+    expect(calls.some((u) => u.includes("search_"))).to.equal(false);
   });
 });

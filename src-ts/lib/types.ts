@@ -34,6 +34,11 @@ export interface MqttPublishStatus {
   message?: string;
   topics_published?: number;
   broker?: string;
+  /**
+   * Category topic slugs present on the broker after this publish. Used to clear the retained
+   * topics of categories that disappear later (expired, filter changed, end of year).
+   */
+  category_slugs?: string[];
 }
 
 /** One chosen entry of the hausmuell.info address cascade. */
@@ -134,7 +139,16 @@ export interface WasteEntry {
   wochentag_num?: number;
 }
 
+/**
+ * Outcome of the last fetch attempt:
+ * `ok` = dates received; `no_future_dates` = upstream reachable but no upcoming dates
+ * (typical between the last collection of a year and the next year's publication);
+ * `error` = fetch failed (network, portal, address) – cached dates are still served.
+ */
+export type FetchStatus = "ok" | "no_future_dates" | "error";
+
 export interface WasteData {
+  /** Last successful fetch (local time). Not touched by the hourly recompute or by failures. */
   timestamp: string;
   standort: string;
   location: string;
@@ -142,6 +156,23 @@ export interface WasteData {
   next_fetch_due?: string;
   next_fetch_offset_minutes?: number;
   mqtt?: MqttPublishStatus;
+  /**
+   * All upcoming dates per (filtered) category as local `YYYY-MM-DD`, ascending. Lets the
+   * hourly run recompute `termine` after midnight without contacting the upstream.
+   */
+  upcoming?: Record<string, string[]>;
+  /** Missing on caches written before this field existed = `ok`. */
+  status?: FetchStatus;
+  /** Unix seconds of the last successful fetch (same instant as `timestamp`). */
+  last_success_unix?: number;
+  /** Last fetch attempt, successful or not (local time). */
+  last_attempt?: string;
+  /** Consecutive failed fetch attempts (0 after a success); drives the retry backoff. */
+  failed_attempts?: number;
+  /** Error message of the last failed attempt (only while `status` is `error`). */
+  error?: string;
+  /** Local time `termine` was last recomputed from `upcoming`. */
+  recomputed_at?: string;
 }
 
 export interface ApiStatus {

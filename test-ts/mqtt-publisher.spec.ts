@@ -87,7 +87,7 @@ describe("MQTT publisher", () => {
     });
     expect(status.ok).to.equal(true);
     expect(status.broker).to.equal("mqtt://broker.example:18883");
-    expect(published.length).to.equal(14);
+    expect(published.length).to.equal(26);
     expect(status.topics_published).to.equal(published.length);
     expect(ended).to.equal(true);
     expect(published.every((m) => m.retain === false)).to.equal(true);

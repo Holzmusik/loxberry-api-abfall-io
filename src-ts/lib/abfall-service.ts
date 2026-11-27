@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { log } from "./logger.js";
-import { publishWasteData } from "./mqtt-publisher.js";
+import { isNoCollectionDatesError } from "./errors.js";
+import { publishWasteData, safeTopicSegment } from "./mqtt-publisher.js";
 import { readMergedCronInstallProbe, resolvePaths } from "./paths.js";
 import { foldForSearch } from "./fold-for-search.js";
 import {
@@ -22,6 +23,7 @@ import { cascadeLabel, isCascadeComplete, legacyFetchIcs, v3FetchIcs } from "./a
 import { getServiceMapSourceInfo, loadServiceMap, titleForServiceKey } from "./service-map.js";
 import type {
   ApiStatus,
+  FetchStatus,
   LocationConfig,
   MqttPublishStatus,
   PluginConfig,
@@ -217,6 +219,8 @@ function localizedWeekdayName(lang: string | undefined, d: Date): string {
 export interface ParseIcsOptions {
   /** Plugin language, e.g. "de" or "en" (from config). Affects weekday names only. */
   language?: string;
+  /** Reference time for "days until" (default: now). */
+  now?: Date;
 }
 
 /**
@@ -237,10 +241,43 @@ export function parseIcsDate(dateStr: string): Date | null {
   return new Date(Number(y), Number(mo) - 1, Number(d));
 }
 
-export function parseIcs(icsText: string, options?: ParseIcsOptions): Record<string, WasteEntry> {
-  const lang = options?.language;
-  const now = new Date();
-  const out: Record<string, WasteEntry> = {};
+/**
+ * Whole calendar days from `from` to `to` (local dates). Counted on the calendar date parts,
+ * so DST days with 23 h / 25 h do not shift the result (plain ms / 86 400 000 is one day short
+ * across the switch to summer time).
+ */
+export function calendarDaysBetween(from: Date, to: Date): number {
+  const a = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((b - a) / 86_400_000);
+}
+
+/** Local calendar day as `YYYY-MM-DD`. */
+export function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** `YYYY-MM-DD` (cache) or `DD.MM.YYYY` (`datum`) → local midnight; null if malformed. */
+export function parseDay(s: string): Date | null {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const de = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s);
+  if (de) return new Date(Number(de[3]), Number(de[2]) - 1, Number(de[1]));
+  return null;
+}
+
+/** Category key used everywhere (cache, filter, MQTT) for an ICS SUMMARY. */
+function categoryKey(summary: string): string {
+  return summary.replace(/[^a-zA-ZäöüÄÖÜß0-9 -]/g, "").trim();
+}
+
+/**
+ * All collection days per category from an ICS text, as sorted unique `YYYY-MM-DD` lists.
+ * Days before `now` (local date) are dropped.
+ */
+export function collectIcsDates(icsText: string, now: Date = new Date()): Record<string, string[]> {
+  const today = isoDay(now);
+  const sets: Record<string, Set<string>> = {};
   let currentSummary = "";
   let currentDate: Date | null = null;
 
@@ -253,41 +290,66 @@ export function parseIcs(icsText: string, options?: ParseIcsOptions): Record<str
       currentDate = parseIcsDate(dateStr);
     } else if (line === "END:VEVENT") {
       if (currentSummary && currentDate) {
-        const currentDateDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-        const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const diffMs = currentDateDay.getTime() - nowDay.getTime();
-        const daysUntil = Math.floor(diffMs / (24 * 3600 * 1000));
-        if (daysUntil >= 0) {
-          const safeName = currentSummary.replace(/[^a-zA-ZäöüÄÖÜß0-9 -]/g, "").trim();
-          const wochentag = localizedWeekdayName(lang, currentDate);
-          const wochentagNum = isoWeekdayMon1ToSun7(currentDate);
-          const entry: WasteEntry = {
-            tage: daysUntil,
-            datum: `${String(currentDate.getDate()).padStart(2, "0")}.${String(currentDate.getMonth() + 1).padStart(2, "0")}.${currentDate.getFullYear()}`,
-            wochentag,
-            wochentag_num: wochentagNum,
-          };
-          if (!out[safeName] || daysUntil < out[safeName].tage) {
-            out[safeName] = entry;
-          }
+        const day = isoDay(currentDate);
+        const key = categoryKey(currentSummary);
+        if (key && day >= today) {
+          (sets[key] ??= new Set()).add(day);
         }
       }
       currentSummary = "";
       currentDate = null;
     }
   }
-  log.info(`Parsed ICS: ${Object.keys(out).length} upcoming categories`);
-  return out;
+  return Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, [...v].sort()]));
+}
+
+/**
+ * Next collection per category relative to `now`, from a `collectIcsDates`-style map.
+ * Expired days are dropped from the returned `upcoming`; categories without any upcoming
+ * day are dropped entirely. `termine` is sorted by days ascending.
+ */
+export function buildTermine(
+  upcoming: Record<string, string[]>,
+  now: Date = new Date(),
+  language?: string,
+): { termine: Record<string, WasteEntry>; upcoming: Record<string, string[]> } {
+  const today = isoDay(now);
+  const pruned: Record<string, string[]> = {};
+  const entries: [string, WasteEntry][] = [];
+  for (const [name, days] of Object.entries(upcoming)) {
+    const future = [...new Set(days.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= today))].sort();
+    if (future.length === 0) continue;
+    pruned[name] = future;
+    const date = parseDay(future[0])!;
+    entries.push([
+      name,
+      {
+        tage: calendarDaysBetween(now, date),
+        datum: `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.${date.getFullYear()}`,
+        wochentag: localizedWeekdayName(language, date),
+        wochentag_num: isoWeekdayMon1ToSun7(date),
+      },
+    ]);
+  }
+  entries.sort((a, b) => a[1].tage - b[1].tage);
+  return { termine: Object.fromEntries(entries), upcoming: pruned };
+}
+
+export function parseIcs(icsText: string, options?: ParseIcsOptions): Record<string, WasteEntry> {
+  const now = options?.now ?? new Date();
+  const { termine } = buildTermine(collectIcsDates(icsText, now), now, options?.language);
+  log.info(`Parsed ICS: ${Object.keys(termine).length} upcoming categories`);
+  return termine;
 }
 
 /**
  * If categories_filter in config is non-empty, only keep those category keys
  * (name match after {@link foldForSearch}; empty / missing filter = all).
  */
-export function pickFilteredTermine(
-  termine: Record<string, WasteEntry>,
+export function pickFilteredTermine<T>(
+  termine: Record<string, T>,
   filter: string[] | undefined,
-): Record<string, WasteEntry> {
+): Record<string, T> {
   if (!filter || filter.length === 0) {
     return termine;
   }
@@ -299,8 +361,7 @@ export function pickFilteredTermine(
   );
 }
 
-function nowTimestamp(): string {
-  const d = new Date();
+function nowTimestamp(d: Date = new Date()): string {
   const pad = (n: number): string => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
@@ -347,18 +408,55 @@ function isAbfallioAddressSaved(loc: LocationConfig | undefined): boolean {
   return !!loc.f_id_strasse;
 }
 
+/**
+ * Download the calendar from the active upstream, cache it and publish it.
+ * - Upstream has no dates (yet): cached with status `no_future_dates` – not an error.
+ * - Any other failure: recorded in the cache (status `error`, retry backoff, still-upcoming
+ *   cached dates recomputed and published with `ok` = 0), then rethrown.
+ */
 export async function fetchData(config = loadConfig()): Promise<WasteData> {
-  switch (activeProvider(config)) {
+  try {
+    switch (activeProvider(config)) {
+      case "hausmuell":
+        return await fetchHausmuellData(config);
+      case "muellabfuhr":
+        return await fetchMuellabfuhrData(config);
+      case "awido":
+        return await fetchAwidoData(config);
+      case "offizium":
+        return await fetchOffiziumData(config);
+      default:
+        return await fetchAbfallioData(config);
+    }
+  } catch (err) {
+    if (isNoCollectionDatesError(err)) {
+      log.warn(`${err.message} Treating as 'no_future_dates' (no error, regular fetch interval).`);
+      return finalizeAndCache(config, "", locationLabel(config));
+    }
+    try {
+      await recordFetchFailure(config, err);
+    } catch (recordErr) {
+      log.warn(`Could not record the fetch failure: ${String(recordErr)}`);
+    }
+    throw err;
+  }
+}
+
+/** Human-readable address of the active upstream (same as shown on the Status tab). */
+export function locationLabel(cfg: PluginConfig): string {
+  switch (activeProvider(cfg)) {
     case "hausmuell":
-      return fetchHausmuellData(config);
+      return hausmuellLocationLabel(cfg.hausmuell);
     case "muellabfuhr":
-      return fetchMuellabfuhrData(config);
+      return muellabfuhrLocationLabel(cfg.muellabfuhr ?? {});
     case "awido":
-      return fetchAwidoData(config);
+      return awidoLocationLabel(cfg.awido ?? {});
     case "offizium":
-      return fetchOffiziumData(config);
-    default:
-      return fetchAbfallioData(config);
+      return offiziumLocationLabel(cfg.offizium ?? {});
+    default: {
+      const loc = cfg.location ?? {};
+      return loc.api ? cascadeLabel(loc) : `${loc.street_name ?? ""} ${loc.hnr_name ?? ""}`.trim();
+    }
   }
 }
 
@@ -478,46 +576,155 @@ async function fetchAbfallioData(config: PluginConfig): Promise<WasteData> {
   return finalizeAndCache(config, text, `${streetName} ${hnrName}`.trim());
 }
 
-/** Shared tail for every upstream: parse ICS, apply filter, write cache, publish MQTT. */
-async function finalizeAndCache(config: PluginConfig, text: string, location: string): Promise<WasteData> {
-  const rawTermine = parseIcs(text, { language: config.language });
-  const termine = pickFilteredTermine(rawTermine, config.categories_filter);
-  if (Object.keys(termine).length === 0 && Object.keys(rawTermine).length > 0) {
+/** Shared tail for every upstream: collect dates, apply filter, write cache, publish MQTT. */
+async function finalizeAndCache(config: PluginConfig, text: string, location: string, now = new Date()): Promise<WasteData> {
+  const previous = readCache();
+  const rawUpcoming = collectIcsDates(text, now);
+  let upcoming = pickFilteredTermine(rawUpcoming, config.categories_filter);
+  const rawCount = Object.keys(rawUpcoming).length;
+  if (Object.keys(upcoming).length === 0 && rawCount > 0) {
     log.warn(
-      `Category filter excluded all ${Object.keys(rawTermine).length} ICS categories; cache will be empty until the filter matches names in the feed.`,
+      `Category filter excluded all ${rawCount} ICS categories; cache will be empty until the filter matches names in the feed.`,
     );
   }
+  const status: FetchStatus = rawCount === 0 ? "no_future_dates" : "ok";
+  if (status === "no_future_dates") {
+    log.warn("Upstream delivered no upcoming collection dates (next year probably not published yet).");
+    // Keep dates of the same address that are still ahead (portal glitch, partial year export).
+    if (previous && previous.location === location) {
+      const kept = pickFilteredTermine(cachedUpcoming(previous), config.categories_filter);
+      const stillAhead = buildTermine(kept, now).upcoming;
+      if (Object.keys(stillAhead).length > 0) {
+        log.info(`Keeping ${Object.keys(stillAhead).length} cached categories that are still upcoming.`);
+        upcoming = stillAhead;
+      }
+    }
+  }
+  const built = buildTermine(upcoming, now, config.language);
+
   const intervalHours = normalizedFetchIntervalHours(config.fetch_interval_hours);
   const fuzzMinutes = Math.max(0, config.fetch_fuzz_minutes ?? DEFAULT_FETCH_FUZZ_MINUTES);
   const offsetMinutes = fuzzMinutes === 0 ? 0 : Math.round((Math.random() * 2 - 1) * fuzzMinutes);
-  const dueAt = new Date(Date.now() + intervalHours * 3600 * 1000 + offsetMinutes * 60 * 1000);
+  const dueAt = new Date(now.getTime() + intervalHours * 3600 * 1000 + offsetMinutes * 60 * 1000);
+  const ts = nowTimestamp(now);
 
   const result: WasteData = {
-    timestamp: nowTimestamp(),
+    timestamp: ts,
     standort: location,
     location,
-    termine: Object.fromEntries(
-      Object.entries(termine).sort((a, b) => a[1].tage - b[1].tage),
-    ),
+    termine: built.termine,
     next_fetch_due: formatTimestamp(dueAt),
     next_fetch_offset_minutes: offsetMinutes,
+    upcoming: built.upcoming,
+    status,
+    last_success_unix: Math.floor(now.getTime() / 1000),
+    last_attempt: ts,
+    failed_attempts: 0,
+    recomputed_at: ts,
   };
-
-  const { cacheFile, dataDir } = getPaths();
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(cacheFile, JSON.stringify(result, null, 2), "utf-8");
   log.info(
-    `Data cached to ${cacheFile} (${Object.keys(termine).length} categories), ` +
+    `Caching ${Object.keys(result.termine).length} categories (status ${status}), ` +
       `next due ${result.next_fetch_due} (offset ${offsetMinutes}min)`,
   );
+  return writeCacheAndPublish(config, result, previous);
+}
 
-  if (config.mqtt?.enabled) {
-    const status = await publishWasteData({ config: config.mqtt, data: result });
-    result.mqtt = status;
-    fs.writeFileSync(cacheFile, JSON.stringify(result, null, 2), "utf-8");
+/** Parsed cache file, or null if missing / unreadable. */
+function readCache(): WasteData | null {
+  const { cacheFile } = getPaths();
+  try {
+    if (!fs.existsSync(cacheFile)) return null;
+    const data = JSON.parse(fs.readFileSync(cacheFile, "utf-8")) as WasteData;
+    return data && typeof data === "object" ? data : null;
+  } catch (err) {
+    log.warn(`Could not read cache ${cacheFile}: ${String(err)}`);
+    return null;
   }
+}
 
-  return result;
+/** Upcoming days of a cache; caches from before `upcoming` existed only know the next day per category. */
+function cachedUpcoming(data: Partial<WasteData>): Record<string, string[]> {
+  if (data.upcoming && typeof data.upcoming === "object") return data.upcoming;
+  const out: Record<string, string[]> = {};
+  for (const [name, entry] of Object.entries(data.termine ?? {})) {
+    const d = parseDay(entry?.datum ?? "");
+    if (d) out[name] = [isoDay(d)];
+  }
+  return out;
+}
+
+async function writeCacheAndPublish(config: PluginConfig, data: WasteData, previous: WasteData | null): Promise<WasteData> {
+  const { cacheFile, dataDir } = getPaths();
+  fs.mkdirSync(dataDir, { recursive: true });
+  const previousSlugs =
+    previous?.mqtt?.category_slugs ?? Object.keys(previous?.termine ?? {}).map((n) => safeTopicSegment(n));
+  delete data.mqtt;
+  fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), "utf-8");
+  log.info(`Data cached to ${cacheFile}`);
+  if (config.mqtt?.enabled) {
+    data.mqtt = await publishWasteData({ config: config.mqtt, data, previousSlugs });
+    fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), "utf-8");
+  }
+  return data;
+}
+
+/**
+ * Hourly run without an upstream request: recompute `days` from the cached dates (after midnight
+ * they would otherwise be one too high until the next fetch), drop expired dates, and publish
+ * when something changed or the last MQTT publish failed. Returns the (possibly updated) cache.
+ */
+export async function refreshCachedData(config = loadConfig(), now = new Date()): Promise<WasteData | null> {
+  const cached = readCache();
+  if (!cached || !cached.termine) return null;
+  const source = pickFilteredTermine(cachedUpcoming(cached), config.categories_filter);
+  const { termine, upcoming } = buildTermine(source, now, config.language);
+  const changed = JSON.stringify(termine) !== JSON.stringify(cached.termine) || !cached.upcoming;
+  const mqttRetry = !!config.mqtt?.enabled && cached.mqtt?.ok !== true;
+  if (!changed && !mqttRetry) {
+    return cached;
+  }
+  log.info(
+    `Recomputing days from cache without upstream request (${Object.keys(termine).length} categories` +
+      `${changed ? "" : ", unchanged - retrying MQTT publish"})`,
+  );
+  return writeCacheAndPublish(config, { ...cached, termine, upcoming, recomputed_at: nowTimestamp(now) }, cached);
+}
+
+/** Retry delay after `failures` consecutive failed fetches: 1 h, 2 h, 4 h, … capped at the fetch interval. */
+export function retryBackoffHours(failures: number, intervalHours: number): number {
+  return Math.min(intervalHours, 2 ** Math.max(0, failures - 1));
+}
+
+/**
+ * Record a failed fetch: status `error`, attempt counter for the backoff, cached dates
+ * recomputed for today and published (with `ok` = 0) so Loxone keeps correct days.
+ */
+export async function recordFetchFailure(config: PluginConfig, err: unknown, now = new Date()): Promise<WasteData> {
+  const cached = readCache();
+  const ts = nowTimestamp(now);
+  const base: WasteData = cached ?? { timestamp: "", standort: "", location: locationLabel(config), termine: {} };
+  const source = pickFilteredTermine(cachedUpcoming(base), config.categories_filter);
+  const { termine, upcoming } = buildTermine(source, now, config.language);
+  const failures = (base.status === "error" ? base.failed_attempts ?? 0 : 0) + 1;
+  const retryH = retryBackoffHours(failures, normalizedFetchIntervalHours(config.fetch_interval_hours));
+  const message = err instanceof Error ? err.message : String(err);
+  log.warn(
+    `Fetch failed (attempt ${failures}); serving ${Object.keys(termine).length} cached categories, next retry in ~${retryH} h`,
+  );
+  return writeCacheAndPublish(
+    config,
+    {
+      ...base,
+      termine,
+      upcoming,
+      status: "error",
+      error: message.slice(0, 500),
+      last_attempt: ts,
+      failed_attempts: failures,
+      recomputed_at: ts,
+    },
+    cached,
+  );
 }
 
 function formatTimestamp(d: Date): string {
@@ -625,10 +832,22 @@ export function shouldFetch(config: PluginConfig, force: boolean, now: Date = ne
   }
   try {
     const cached = JSON.parse(fs.readFileSync(cacheFile, "utf-8")) as Partial<WasteData>;
+    const intervalHours = normalizedFetchIntervalHours(config.fetch_interval_hours);
+    if (cached.status === "error" && cached.last_attempt) {
+      const failures = cached.failed_attempts ?? 1;
+      const backoffH = retryBackoffHours(failures, intervalHours);
+      // 5 min slack: the hourly cron at :17 must not miss a retry that is due a few seconds later.
+      const retryAt =
+        new Date(cached.last_attempt.replace(" ", "T")).getTime() + backoffH * 3600 * 1000 - 5 * 60 * 1000;
+      if (now.getTime() < retryAt) {
+        log.info(`Skipping fetch: last attempt ${cached.last_attempt} failed (${failures}x), retry backoff ${backoffH}h`);
+        return false;
+      }
+      return true;
+    }
     const lastTs = cached.timestamp ?? "";
     if (!lastTs) return true;
     const lastDate = new Date(lastTs.replace(" ", "T"));
-    const intervalHours = normalizedFetchIntervalHours(config.fetch_interval_hours);
     const fuzzMinutes = Math.max(0, config.fetch_fuzz_minutes ?? DEFAULT_FETCH_FUZZ_MINUTES);
     const offsetMinutes = cached.next_fetch_offset_minutes ?? 0;
     const dueAt = new Date(

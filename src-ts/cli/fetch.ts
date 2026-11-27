@@ -5,6 +5,7 @@ import {
   fetchData,
   isLocationComplete,
   loadConfig,
+  refreshCachedData,
   shouldFetch,
 } from "../lib/abfall-service.js";
 import { log } from "../lib/logger.js";
@@ -35,11 +36,13 @@ async function main(): Promise<void> {
   }
 
   if (!shouldFetch(config, force)) {
+    // No upstream request: keep "days" correct across midnight and drop expired dates.
+    await refreshCachedData(config);
     return;
   }
 
   const result = await fetchData(config);
-  log.info(`Fetch successful: ${result.standort ?? "?"}`);
+  log.info(`Fetch successful: ${result.standort ?? "?"} (status ${result.status ?? "ok"})`);
   const names = Object.keys(result.termine);
   if (names.length > 0) {
     log.info("Upcoming dates:");
