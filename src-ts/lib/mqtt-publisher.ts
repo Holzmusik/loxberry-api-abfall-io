@@ -11,7 +11,7 @@ export interface ResolvedBroker {
   source: string;
 }
 
-const DEFAULT_PREFIX = "loxberry/abfallio";
+const DEFAULT_PREFIX = "abfallio";
 
 function nowTs(): string {
   const d = new Date();

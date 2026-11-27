@@ -258,7 +258,7 @@ Toggle publish-after-fetch; auto-detect LoxBerry broker or set host/port/user. T
 
 "-" is used instead of an empty payload because an empty retained message deletes the topic. Topics of categories that disappear (expired, filtered out) are removed from the broker.
 
-Default prefix `loxberry/abfallio`. Umlauts in category names fold to ASCII (`Grünabfall` → `gruenabfall`).
+Default prefix `abfallio`. Umlauts in category names fold to ASCII (`Grünabfall` → `gruenabfall`).
 
 ### 4) Loxone Miniserver
 

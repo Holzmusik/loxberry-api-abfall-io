@@ -460,7 +460,7 @@ switch ($action) {
         $config['mqtt']['user'] = (string) ($_POST['mqtt_user'] ?? '');
         $config['mqtt']['password'] = (string) ($_POST['mqtt_password'] ?? '');
         $topic = trim((string) ($_POST['mqtt_topic_prefix'] ?? ''));
-        $config['mqtt']['topic_prefix'] = $topic !== '' ? $topic : 'loxberry/abfallio';
+        $config['mqtt']['topic_prefix'] = $topic !== '' ? $topic : 'abfallio';
         $config['mqtt']['retain'] = !empty($_POST['mqtt_retain']) && $_POST['mqtt_retain'] !== '0';
 
         file_put_contents($config_file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));

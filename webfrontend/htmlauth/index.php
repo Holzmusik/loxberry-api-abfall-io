@@ -99,7 +99,7 @@ $mqttHost = (string) ($mqtt['host'] ?? '');
 $mqttPort = (int) ($mqtt['port'] ?? 1883);
 $mqttUser = (string) ($mqtt['user'] ?? '');
 $mqttPassword = (string) ($mqtt['password'] ?? '');
-$mqttTopic = (string) ($mqtt['topic_prefix'] ?? 'loxberry/abfallio');
+$mqttTopic = (string) ($mqtt['topic_prefix'] ?? 'abfallio');
 $mqttRetain = (bool) ($mqtt['retain'] ?? true);
 
 $serviceKey = (string) ($config['service_key'] ?? '');
@@ -827,7 +827,7 @@ if (!$use_loxberry_frame) {
         <div class="form-row">
             <div class="form-group">
                 <label><?= htmlspecialchars(AbfallioI18N::t('SETTINGS', 'LABEL_MQTT_TOPIC')) ?></label>
-                <input type="text" id="mqtt-topic" value="<?= htmlspecialchars($mqttTopic) ?>" placeholder="loxberry/abfallio">
+                <input type="text" id="mqtt-topic" value="<?= htmlspecialchars($mqttTopic) ?>" placeholder="abfallio">
             </div>
             <div class="form-group">
                 <label>&nbsp;</label>
